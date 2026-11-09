@@ -78,8 +78,15 @@ AirPass añade dos cosas que KeePass no tiene: **aplicación móvil** y **sincro
 
 ### Memoria y plataforma
 - **SR-06** No convertir nunca la contraseña maestra ni los secretos en `String`. Usar búferes que se borren tras usarse y mantener los campos protegidos cifrados en memoria. Proteger por defecto también las notas y los campos personalizados marcados como sensibles.
-- **SR-07** Desbloqueo rápido con biometría: guardar la clave derivada envuelta con una clave del Android Keystore o del Keychain de iOS (respaldada por hardware, `setUserAuthenticationRequired(true)` y que se invalide al cambiar la biometría). La contraseña maestra sigue siendo obligatoria tras reiniciar o tras N días.
-- **SR-08** Equivalentes móviles de las defensas de KeePass:
+- **SR-07** Desbloqueo rápido con biometría: guardar la clave derivada envuelta con una clave protegida por la plataforma. En Android, una clave del Keystore respaldada por hardware, con `setUserAuthenticationRequired(true)` y que se invalide al cambiar la biometría. En Windows, Windows Hello o DPAPI con ámbito de usuario. La contraseña maestra sigue siendo obligatoria tras reiniciar o tras N días.
+- **SR-08** Equivalentes de las defensas de KeePass en cada plataforma.
+
+  En Windows:
+  - `SetWindowDisplayAffinity` para excluir la ventana de capturas de pantalla.
+  - Portapapeles con los formatos `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory=0` y `CanUploadToCloudClipboard=0`, más borrado automático.
+  - Exclusión de Windows Error Reporting.
+
+  En Android:
   - `FLAG_SECURE` y la vista de privacidad en multitarea, en lugar de `SetWindowDisplayAffinity`.
   - El framework de **Autofill** en lugar de Auto-Type.
   - Portapapeles marcado como sensible (`ClipDescription.EXTRA_IS_SENSITIVE`) y borrado automático.

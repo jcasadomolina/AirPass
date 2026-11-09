@@ -1,6 +1,7 @@
 # AirPass
 Herramienta de gestor de contraseñas multiplataforma, sincronización local entre dispositivos móviles y ordenador.
 
+- **Windows y Android** en la primera versión.
 - **Sin nube**: tus contraseñas solo están en tus dispositivos.
 - **Compatible con KeePass**: usa el formato abierto KDBX 4.1, así que puedes abrir tu base de datos con KeePass, KeePassXC o KeePassDX.
 - **Sincronización por la red local** entre dispositivos emparejados con un código QR.
@@ -30,10 +31,10 @@ cd AirPass
 ```
 
 ### 3. Primeras tareas (fase F0)
-1. **Decidir el stack** y registrarlo en `docs/adr/001-stack.md`. La recomendación es Kotlin Multiplatform con Compose Multiplatform (ver el plan, §2).
+1. **Stack**: Kotlin Multiplatform con Compose Multiplatform, documentado en [docs/adr/001-stack.md](docs/adr/001-stack.md).
 2. **Generar el esqueleto** con el asistente de Kotlin Multiplatform (Android + Desktop) y reorganizarlo en los módulos `core`, `crypto`, `sync`, `shared`, `app-desktop` y `app-android`.
 3. **Evaluar la librería KDBX** (kotpass u otra) contra ficheros creados con KeePass y anotar la decisión en `docs/adr/002-kdbx.md`.
-4. **Configurar la CI** con GitHub Actions: compilar y probar en Linux, Windows, macOS y Android.
+4. **Configurar la CI** con GitHub Actions: compilar y probar en Windows y Android.
 5. Añadir `SECURITY.md` con el canal privado para comunicar vulnerabilidades.
 
 Cuando exista el código, se compilará con:
