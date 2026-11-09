@@ -1,6 +1,6 @@
 # Plan de desarrollo de AirPass
 
-**AirPass** es un gestor de contraseñas multiplataforma (escritorio y móvil) que funciona sin conexión y sincroniza los dispositivos por la red local, sin nube. Toma como referencia KeePass ([analisis-keepass.md](analisis-keepass.md)) y cumple los requisitos de seguridad de [seguridad.md](seguridad.md) (`SR-xx`).
+**AirPass** es un gestor de contraseñas para **Windows y Android** que funciona sin conexión y sincroniza los dispositivos por la red local, sin nube. Toma como referencia KeePass ([analisis-keepass.md](analisis-keepass.md)) y cumple los requisitos de seguridad de [seguridad.md](seguridad.md) (`SR-xx`).
 
 ## 1. Principios
 
@@ -9,19 +9,19 @@
 3. **No se escribe criptografía propia**: primitivos de librerías auditadas y, si es viable, una librería KDBX existente.
 4. **Un único núcleo compartido** por todas las plataformas, con la interfaz nativa de cada una.
 
-## 2. Stack recomendado
+## 2. Stack
+
+Decidido en [ADR-001](adr/001-stack.md).
 
 | Capa | Elección | Motivo |
 |---|---|---|
-| Lenguaje | **Kotlin Multiplatform** (KMP) | Un único núcleo para Android y escritorio (JVM), con iOS posible más adelante |
-| UI | **Compose Multiplatform** | Una sola base de UI para Android, Windows, macOS y Linux |
-| KDBX | Evaluar **kotpass** (Kotlin, KDBX 4) y, si no encaja, implementación propia sobre la especificación | Evita reescribir el parser y el writer (`SR-01`) |
+| Lenguaje | **Kotlin Multiplatform** (KMP) | Un único núcleo para Android y Windows (escritorio JVM) |
+| UI | **Compose Multiplatform** | Una sola base de UI para Android y Windows |
+| KDBX | **Implementación propia** sobre BouncyCastle, validada con ficheros reales ([ADR-002](adr/002-kdbx.md)) | Aprendizaje, control de los secretos en memoria y menos riesgo de cadena de suministro (`SR-01`, `SR-06`) |
 | Criptografía | **BouncyCastle** (AES-256-CBC, ChaCha20, Argon2d/id, HMAC, SHA-2) | Admite Argon2d, necesario para leer ficheros de KeePass. libsodium solo trae Argon2id |
-| Red local | **Ktor** (servidor y cliente) con TLS 1.3 y *pinning*. Descubrimiento con mDNS (`NsdManager` en Android y JmDNS en escritorio) | `SR-11`…`SR-14` |
-| Almacén seguro | Android Keystore y BiometricPrompt. Escritorio: DPAPI, Keychain o Secret Service | `SR-07` |
-| Build y CI | Gradle (Kotlin DSL) y GitHub Actions | Pruebas en Linux, Windows y macOS más Android |
-
-> **Decisión abierta**: si se prefiere la mejor experiencia nativa en iOS desde el principio, las alternativas son Flutter, o un núcleo en Rust con UIs nativas. Se fija en el ADR-001 antes de la fase 1.
+| Red local | **Ktor** (servidor y cliente) con TLS 1.3 y *pinning*. Descubrimiento con mDNS (`NsdManager` en Android y JmDNS en Windows) | `SR-11`…`SR-14` |
+| Almacén seguro | Android: Keystore y BiometricPrompt. Windows: DPAPI y Windows Hello mediante JNA | `SR-07` |
+| Build y CI | Gradle (Kotlin DSL) y GitHub Actions | Pruebas en Windows y Android. Instalador MSI con jpackage |
 
 ## 3. Arquitectura
 
@@ -71,13 +71,13 @@ Prioridad: **M** (imprescindible en la v1), **S** (debería), **C** (podría), *
 
 | Fase | Objetivo | Entregables | Criterio de salida |
 |---|---|---|---|
-| **F0 · Fundaciones** (1–2 sem.) | Repositorio listo | Esqueleto KMP con los módulos de §3, CI en 3 SO más Android, ADR-001 (stack) y ADR-002 (librería KDBX), `SECURITY.md` | CI en verde y el *hello world* arranca en escritorio y Android |
+| **F0 · Fundaciones** (1–2 sem.) | Repositorio listo | Esqueleto KMP con los módulos de §3, CI en Windows y Android, ADR-001 (stack) y ADR-002 (librería KDBX), `SECURITY.md` | CI en verde y el *hello world* arranca en Windows y Android |
 | **F1 · Núcleo KDBX** (3–4 sem.) | Leer y escribir KDBX 4.1 | `core` y `crypto`, autotest y fixtures creadas con KeePass 2.62 (AES-KDF, Argon2d, Argon2id, ChaCha20 y fichero clave) | Ida y vuelta KeePass → AirPass → KeePass sin pérdidas. Tests de HMAC inválido (`SR-05`). Fuzzing básico del lector |
-| **F2 · Escritorio MVP** (3 sem.) | Uso diario en PC | RF-01…06 en `app-desktop`, guardado atómico (`SR-10`) y portapapeles seguro | Pruebas de uso. Volcado de memoria sin la contraseña maestra (`SR-06`) |
+| **F2 · Windows MVP** (3 sem.) | Uso diario en PC | RF-01…06 en `app-desktop`, guardado atómico (`SR-10`), portapapeles seguro y capa nativa de Windows (`SR-08`) | Pruebas de uso. Volcado de memoria sin la contraseña maestra (`SR-06`) |
 | **F3 · Android MVP** (4 sem.) | Uso diario en móvil | RF-01…07, Keystore y biometría (`SR-07`), `FLAG_SECURE` y `allowBackup=false` (`SR-08`) | Autofill funcionando en Chrome y en las apps principales |
 | **F4 · Sincronización local** (4–5 sem.) | Mantener los dispositivos al día | Emparejamiento QR+SAS, TLS 1.3 con *pinning*, mDNS, fusión y anti-*rollback* (`SR-11`…`SR-17`) | Escenarios de conflicto automatizados (editar la misma entrada en dos dispositivos, borrar frente a editar). Revocación |
 | **F5 · Endurecimiento y 1.0** (3+ sem.) | Publicar | RF-10…13, SBOM, escaneo de dependencias, fuzzing continuo y auditoría externa (`SR-20`) | Auditoría sin hallazgos críticos abiertos |
-| **Posterior** | Ampliar | iOS, extensión de navegador, passkeys y Auto-Type | — |
+| **Posterior** | Ampliar | macOS y Linux (mismo destino JVM), iOS (requiere otro proveedor criptográfico), extensión de navegador, passkeys y Auto-Type | — |
 
 ## 6. Estrategia de pruebas
 
