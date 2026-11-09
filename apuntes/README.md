@@ -14,3 +14,5 @@ Apuntes técnicos y teóricos de lo que voy aprendiendo mientras construyo AirPa
 | 03 | [Derivación de claves (KDF)](temas/03-derivacion-de-claves.md) | Contraseña frente a clave, sal, AES-KDF, Argon2 |
 | 04 | [Cifrado autenticado](temas/04-cifrado-autenticado.md) | Confidencialidad frente a integridad, HMAC, Encrypt-then-MAC, separación de claves |
 | 05 | [Secretos en memoria](temas/05-secretos-en-memoria.md) | Volcados de memoria, GC, borrado de búferes, CVE-2023-32784 |
+| 06 | [Decisiones de arquitectura (ADR)](temas/06-decisiones-de-arquitectura.md) | Estructura de un ADR, compromisos de seguridad, criterios que distinguen |
+| 07 | [No inventes tu criptografía](temas/07-no-inventes-tu-criptografia.md) | Primitivos frente a composición, errores típicos, oráculos de prueba, cadena de suministro |

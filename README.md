@@ -33,7 +33,7 @@ cd AirPass
 ### 3. Primeras tareas (fase F0)
 1. **Stack**: Kotlin Multiplatform con Compose Multiplatform, documentado en [docs/adr/001-stack.md](docs/adr/001-stack.md).
 2. **Generar el esqueleto** con el asistente de Kotlin Multiplatform (Android + Desktop) y reorganizarlo en los módulos `core`, `crypto`, `sync`, `shared`, `app-desktop` y `app-android`.
-3. **Evaluar la librería KDBX** (kotpass u otra) contra ficheros creados con KeePass y anotar la decisión en `docs/adr/002-kdbx.md`.
+3. **Preparar el corpus de pruebas KDBX** con KeePass y KeePassXC, según [docs/adr/002-kdbx.md](docs/adr/002-kdbx.md).
 4. **Configurar la CI** con GitHub Actions: compilar y probar en Windows y Android.
 5. Añadir `SECURITY.md` con el canal privado para comunicar vulnerabilidades.
 

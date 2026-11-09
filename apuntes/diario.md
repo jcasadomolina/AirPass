@@ -21,3 +21,22 @@
 **Lo que aprendí**
 - Un gestor de contraseñas serio no protege solo «con cifrado». Combina un KDF lento, cifrado autenticado, protección en memoria y defensas frente al sistema operativo (portapapeles, capturas de pantalla, volcados de fallos).
 - Ninguna defensa sirve contra malware que se ejecute con mis mismos privilegios. Ese límite hay que reconocerlo en el modelo de amenazas.
+
+## Sesión 2 · 2026-11-09: decisiones de arquitectura
+
+**Qué se hizo**
+1. Se fijaron las reglas de trabajo del proyecto: yo tomo todas las decisiones y hago personalmente los commits, pushes y pull requests, siempre con título y una breve descripción.
+2. Se redactó el **ADR-001** (stack) y se ajustó toda la documentación al alcance **Windows + Android** → [tema 06](temas/06-decisiones-de-arquitectura.md).
+3. Se redactó el **ADR-002** (formato KDBX): implementación propia validada contra ficheros reales → [tema 07](temas/07-no-inventes-tu-criptografia.md).
+
+**Decisiones tomadas**
+- **ADR-001**: Kotlin Multiplatform con Compose Multiplatform para Windows (escritorio JVM) y Android. Se descartaron .NET MAUI, dos apps nativas y un núcleo en Rust.
+- **ADR-002**: opción C. Implemento yo el formato KDBX sobre los primitivos de BouncyCastle y lo valido con un corpus de ficheros `.kdbx` creados con KeePass y KeePassXC. kotpass no entra en la app.
+
+**Decisiones pendientes**
+- ¿Leer KDBX 3.1 o solo 4.x? Propuesta: leer 3.1 y guardar siempre en 4.1.
+
+**Lo que aprendí**
+- Una decisión de arquitectura vale tanto como su **justificación** y sus **consecuencias** escritas. Las consecuencias negativas son la parte más útil de un ADR.
+- El recolector de basura afecta igual a Kotlin y a .NET, así que no sirve para elegir entre ellos. Un criterio solo ayuda a decidir si distingue entre las opciones.
+- Implementar un formato cifrado **no** es «inventar criptografía», siempre que los algoritmos vengan de una librería auditada y haya un oráculo externo que valide el resultado.

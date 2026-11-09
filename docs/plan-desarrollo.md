@@ -17,7 +17,7 @@ Decidido en [ADR-001](adr/001-stack.md).
 |---|---|---|
 | Lenguaje | **Kotlin Multiplatform** (KMP) | Un único núcleo para Android y Windows (escritorio JVM) |
 | UI | **Compose Multiplatform** | Una sola base de UI para Android y Windows |
-| KDBX | Evaluar **kotpass** (Kotlin, KDBX 4) y, si no encaja, implementación propia sobre la especificación | Evita reescribir el parser y el writer (`SR-01`) |
+| KDBX | **Implementación propia** sobre BouncyCastle, validada con ficheros reales ([ADR-002](adr/002-kdbx.md)) | Aprendizaje, control de los secretos en memoria y menos riesgo de cadena de suministro (`SR-01`, `SR-06`) |
 | Criptografía | **BouncyCastle** (AES-256-CBC, ChaCha20, Argon2d/id, HMAC, SHA-2) | Admite Argon2d, necesario para leer ficheros de KeePass. libsodium solo trae Argon2id |
 | Red local | **Ktor** (servidor y cliente) con TLS 1.3 y *pinning*. Descubrimiento con mDNS (`NsdManager` en Android y JmDNS en Windows) | `SR-11`…`SR-14` |
 | Almacén seguro | Android: Keystore y BiometricPrompt. Windows: DPAPI y Windows Hello mediante JNA | `SR-07` |
