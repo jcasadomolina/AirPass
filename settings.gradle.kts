@@ -34,3 +34,4 @@ plugins {
 include(":app-android")
 include(":app-desktop")
 include(":shared")
+include(":crypto")
