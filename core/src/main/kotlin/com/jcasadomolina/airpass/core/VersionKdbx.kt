@@ -3,7 +3,7 @@ package com.jcasadomolina.airpass.core
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-data class VersionKdbx (val menor: Int, val mayor: Int) 
+data class VersionKdbx(val mayor: Int, val menor: Int)
 
 fun leerVersionKdbx(datos: ByteArray): VersionKdbx {
     require(datos.size >= 12) { "El fichero es demasiado corto para ser un KDBX" }
@@ -17,5 +17,5 @@ fun leerVersionKdbx(datos: ByteArray): VersionKdbx {
     val mayor = lector.getShort().toInt()
     require(mayor.compareTo(4) == 0) {"El valor mayor no es 4"}
 
-    return VersionKdbx(mayor, menor)
+    return VersionKdbx(mayor = mayor, menor = menor)
 }
