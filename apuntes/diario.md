@@ -40,3 +40,64 @@
 - Una decisión de arquitectura vale tanto como su **justificación** y sus **consecuencias** escritas. Las consecuencias negativas son la parte más útil de un ADR.
 - El recolector de basura afecta igual a Kotlin y a .NET, así que no sirve para elegir entre ellos. Un criterio solo ayuda a decidir si distingue entre las opciones.
 - Implementar un formato cifrado **no** es «inventar criptografía», siempre que los algoritmos vengan de una librería auditada y haya un oráculo externo que valide el resultado.
+
+## Sesión 3 · 2026-11-09: esqueleto del proyecto
+
+**Qué se hizo**
+1. Generé el proyecto con el asistente de Kotlin Multiplatform (Android y escritorio) y lo copié a la raíz del repositorio. La plantilla ya viene dividida en tres módulos: `shared`, `androidApp` y `desktopApp`.
+2. Hubo que definir `sdk.dir` en `local.properties` para que Gradle encontrara el SDK de Android. Es un fichero local que no se sube.
+3. Hice por primera vez los commits divididos por temas, el push y el pull request desde la terminal → [tema 12](temas/12-git-en-el-dia-a-dia.md).
+
+**Decisiones tomadas**
+- Paquete base: `com.jcasadomolina.airpass`.
+- Los commits, los pushes y los pull requests los hago yo. El asistente propone la división y redacta los títulos y las descripciones.
+
+**Lo que aprendí**
+- El aviso «LF will be replaced by CRLF» no es un error.
+- Un commit con el título equivocado que ya está fusionado no se reescribe. Un `git log --oneline` antes del push lo habría detectado.
+
+## Sesión 4 · 2026-11-10: módulos y primer código
+
+**Qué se hizo**
+1. Renombré `androidApp` y `desktopApp` a `app-android` y `app-desktop` → [tema 08](temas/08-modulos-de-gradle.md).
+2. Creé el módulo `crypto` con la función `sha256` y su test con el vector del NIST → [tema 09](temas/09-tests-y-vectores-de-prueba.md).
+3. Creé el módulo `core`, que depende de `crypto` con `implementation`.
+
+**Decisiones tomadas**
+- `crypto` y `core` son módulos Kotlin/JVM puros, no multiplataforma.
+- El módulo `sync` se crea en la fase F4, cuando tenga contenido. Falta anotarlo en `docs/plan-desarrollo.md`.
+- Forma de trabajo: los tests los escribe el asistente y me los explica.
+
+**Decisiones pendientes**
+- Comprobar si `shared` puede usar un módulo JVM puro desde `commonMain`. No afecta hasta la fase F2.
+
+**Lo que aprendí**
+- Mi primera versión de `sha256` llamaba a `digest()` sin pasarle los datos. Compilaba y devolvía 32 bytes con buen aspecto, pero habría dado la misma clave para cualquier contraseña. Solo el vector de prueba lo detecta.
+- En Kotlin las funciones no tienen por qué ir dentro de una clase, y el paquete lo decide la línea `package`, no la carpeta.
+- `implementation` hace que el compilador impida a la interfaz usar la criptografía directamente.
+
+## Sesión 5 · 2026-11-11: cabecera y claves de KDBX
+
+**Qué se hizo**
+1. Creé con KeePass 2.62 el primer fichero del corpus, `keepass-aes-aeskdf.kdbx`, y miré sus bytes con `Format-Hex`.
+2. Escribí `leerVersionKdbx`, que comprueba las firmas y la versión → [tema 10](temas/10-leer-un-formato-binario.md).
+3. Lectura de los campos TLV de la cabecera con `leerCabeceraKdbx`. Este código y sus tests los escribió el asistente y me los explicó.
+4. Derivación de las claves y verificación de la cabecera con `derivarClaves`: clave compuesta, AES-KDF, claves de cifrado y de HMAC → [tema 11](temas/11-de-la-contrasena-a-las-claves.md). También lo escribió el asistente. AirPass ya distingue la contraseña correcta de una incorrecta.
+
+**Decisiones tomadas**
+- AirPass acepta KDBX 4.0 y 4.1: KeePass 2.62 crea los ficheros nuevos en 4.0.
+- Los ficheros de versión mayor distinta de 4 se rechazan con un error claro. Leer KDBX 3.1 sigue pendiente de decidir.
+
+**Decisiones pendientes**
+- Poner un tope al número de rondas de la KDF o permitir cancelar la apertura.
+- Añadir BouncyCastle para Argon2, con un fichero de prueba de KeePassXC.
+
+**Lo que aprendí**
+- `0x9AA2D903` no cabe en un `Int`. Comparado con `compareTo` compilaba y rechazaba todos los ficheros.
+- Un tamaño leído del fichero se valida antes de reservar memoria.
+- El SHA-256 de la cabecera detecta daños; el HMAC detecta manipulaciones. Un atacante puede recalcular el primero, pero no el segundo.
+- Una contraseña incorrecta y un fichero manipulado no se pueden distinguir.
+- Commiteé un cambio hecho después de pasar los tests y dejé uno roto. Los tests se pasan justo antes de cada commit.
+
+**Para repasar**
+- Los pasos 3 y 4 no los escribí yo. Conviene releer `CabeceraKdbx.kt` y `ClavesKdbx.kt` con los temas 10 y 11 delante hasta poder explicar cada línea.
