@@ -132,3 +132,36 @@ El código y los tests de los pasos 2 y 3 los escribió el asistente y me los ex
 
 **Para repasar**
 - Releer `ContenidoKdbx.kt` y `XmlKdbx.kt` con los temas 13 y 14 delante, y contestar sus preguntas de repaso.
+
+
+## Sesión 7 · 2026-11-12: pantalla, integración continua y portapapeles
+
+**Qué se hizo**
+1. Primera pantalla de escritorio: elegir un fichero, escribir la contraseña y ver las entradas. En `core`, `abrirKdbx` y `borrarSecretos` → [tema 15](temas/15-la-interfaz-y-los-secretos.md).
+2. Flujo de GitHub Actions, `SECURITY.md` y ajustes de `.gitattributes` → [tema 16](temas/16-ci-y-cadena-de-suministro.md).
+3. Botón para copiar la contraseña, con exclusión del historial de Windows y borrado a los 12 segundos (RF-05) → [tema 15](temas/15-la-interfaz-y-los-secretos.md).
+4. Probé a mano la pantalla y el portapapeles con el fichero de prueba.
+
+El código de los tres pasos lo escribió el asistente y me lo explicó.
+
+**Decisiones tomadas**
+- La pantalla vive de momento en `app-desktop`, no en `shared`.
+- Las contraseñas de las entradas no se muestran: solo se copian.
+- Plazo de borrado del portapapeles: 12 segundos, como KeePass.
+- Hice público el repositorio.
+
+**Decisiones pendientes**
+- La integración continua no se ha ejecutado nunca: GitHub indica que la cuenta está bloqueada por un problema de facturación. No hay pagos fallidos ni cuota agotada. Queda aparcado; el siguiente paso sería preguntar a soporte.
+- Sustituir el campo de contraseña de Compose por uno que no use `String`.
+- Revisar el historial del repositorio ahora que es público.
+
+**Lo que aprendí**
+- La limpieza de las claves va en `core`, con `try`/`finally`, para que no dependa de cada pantalla.
+- Una operación lenta fuera del hilo de la interfaz, o la ventana se congela.
+- En Windows, borrar el portapapeles no basta: existe el historial. Hay formatos para pedir que no se guarde.
+- Una etiqueta de versión se puede mover; un hash de commit, no.
+- Un fichero que git ya sigue no deja de seguirse por añadirlo después al `.gitignore`: hay que sacarlo con `git rm --cached`.
+- Guardar los códigos de recuperación de la cuenta de GitHub.
+
+**Para repasar**
+- Releer `Escritorio.kt` y `Portapapeles.kt` con el tema 15 delante, y `ci.yml` con el tema 16.

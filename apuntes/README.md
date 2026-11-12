@@ -23,3 +23,5 @@ Apuntes técnicos y teóricos de lo que voy aprendiendo mientras construyo AirPa
 | 12 | [Git en el día a día](temas/12-git-en-el-dia-a-dia.md) | *Staging*, dividir commits, gitflow, finales de línea, `.gitignore`, corregir errores |
 | 13 | [Autenticar y descifrar el contenido](temas/13-autenticar-y-descifrar-el-contenido.md) | Bloques con HMAC, bloque final, AES-CBC, relleno, *padding oracle*, compresión, cabecera interna |
 | 14 | [El XML y los campos protegidos](temas/14-el-xml-y-los-campos-protegidos.md) | Cifrado de flujo, ChaCha20, cifrado interno, orden del flujo, XXE, defensa en profundidad |
+| 15 | [La interfaz y los secretos](temas/15-la-interfaz-y-los-secretos.md) | Puerta de entrada única, hilos, mensajes de error, límite de `String`, portapapeles de Windows |
+| 16 | [Integración continua y cadena de suministro](temas/16-ci-y-cadena-de-suministro.md) | CI, acciones fijadas por hash, mínimo privilegio, wrapper de Gradle, `SECURITY.md` |
