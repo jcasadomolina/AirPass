@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,8 @@ import java.awt.Frame
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -58,6 +61,7 @@ fun Escritorio() {
                 PantallaEntradas(
                     raiz = abierta,
                     alBloquear = {
+                        Portapapeles.borrar()
                         abierta.borrarSecretos()
                         raiz = null
                     },
@@ -152,6 +156,22 @@ private fun entradasConGrupo(grupo: Grupo, ruta: String = grupo.nombre): List<Pa
 @Composable
 private fun PantallaEntradas(raiz: Grupo, alBloquear: () -> Unit) {
     val entradas = remember(raiz) { entradasConGrupo(raiz) }
+    var aviso by remember { mutableStateOf<String?>(null) }
+    var borradoPendiente by remember { mutableStateOf<Job?>(null) }
+    val ambito = rememberCoroutineScope()
+
+    fun copiarContrasena(entrada: Entrada) {
+        val contrasena = entrada.protegidos["Password"] ?: return
+        Portapapeles.copiarSecreto(contrasena)
+        aviso = "Contraseña copiada. Se borrará del portapapeles en $SEGUNDOS_HASTA_BORRAR segundos."
+        // Una copia nueva reinicia la cuenta atrás.
+        borradoPendiente?.cancel()
+        borradoPendiente = ambito.launch {
+            delay(SEGUNDOS_HASTA_BORRAR * 1000L)
+            Portapapeles.borrar()
+            aviso = null
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -159,7 +179,10 @@ private fun PantallaEntradas(raiz: Grupo, alBloquear: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("${entradas.size} entradas", style = MaterialTheme.typography.titleMedium)
+            Column {
+                Text("${entradas.size} entradas", style = MaterialTheme.typography.titleMedium)
+                aviso?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
             Button(onClick = alBloquear) { Text("Bloquear") }
         }
         HorizontalDivider()
@@ -169,6 +192,11 @@ private fun PantallaEntradas(raiz: Grupo, alBloquear: () -> Unit) {
                     overlineContent = { Text(grupo) },
                     headlineContent = { Text(entrada.campos["Title"].orEmpty().ifEmpty { "(sin título)" }) },
                     supportingContent = { Text(entrada.campos["UserName"].orEmpty()) },
+                    trailingContent = {
+                        if ("Password" in entrada.protegidos) {
+                            TextButton(onClick = { copiarContrasena(entrada) }) { Text("Copiar contraseña") }
+                        }
+                    },
                 )
                 HorizontalDivider()
             }
