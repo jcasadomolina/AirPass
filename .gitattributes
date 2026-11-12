@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# gradlew es un script de Unix: con CRLF no se ejecuta en Linux ni en Git Bash.
+gradlew text eol=lf
+*.bat text eol=crlf
+
+# Los ficheros de prueba no son texto: no se tocan sus finales de línea.
+*.kdbx binary
