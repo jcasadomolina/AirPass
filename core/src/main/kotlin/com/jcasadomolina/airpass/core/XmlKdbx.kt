@@ -82,3 +82,28 @@ fun leerXmlKdbx(contenido: ContenidoKdbx): Grupo {
     descifrados.values.forEach { it.fill(0) }
     return resultado
 }
+
+// Abre una base de datos completa. Las claves y el XML descifrado se borran al terminar,
+// también si algo falla; solo sobreviven los valores protegidos del árbol devuelto.
+fun abrirKdbx(datos: ByteArray, contrasena: CharArray): Grupo {
+    val cabecera = leerCabeceraKdbx(datos)
+    val claves = derivarClaves(datos, cabecera, contrasena)
+    try {
+        val contenido = descifrarKdbx(datos, cabecera, claves)
+        try {
+            return leerXmlKdbx(contenido)
+        } finally {
+            contenido.claveInterna.fill(0)
+            contenido.xml.fill(0)
+        }
+    } finally {
+        claves.cifrado.fill(0)
+        claves.hmac.fill(0)
+    }
+}
+
+// Rellena con ceros todos los valores protegidos del grupo y de sus subgrupos.
+fun Grupo.borrarSecretos() {
+    entradas.forEach { entrada -> entrada.protegidos.values.forEach { it.fill(0) } }
+    grupos.forEach { it.borrarSecretos() }
+}
