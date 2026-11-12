@@ -56,6 +56,26 @@ class PrimitivosTest {
         assertFailsWith<IllegalArgumentException> { aesKdf(ByteArray(32), ByteArray(32), -1) }
     }
 
+    // NIST SP 800-38A, F.2.5 (CBC-AES256), primer bloque. El vector no lleva relleno,
+    // así que se cifra con el JDK, se comprueba el bloque del vector y se descifra de vuelta.
+    @Test
+    fun aes256CbcDescifraElVectorDelNist() {
+        val clave = "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4".hexToByteArray()
+        val iv = "000102030405060708090a0b0c0d0e0f".hexToByteArray()
+        val claro = "6bc1bee22e409f96e93d7e117393172a".hexToByteArray()
+
+        val aes = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding")
+        aes.init(
+            javax.crypto.Cipher.ENCRYPT_MODE,
+            javax.crypto.spec.SecretKeySpec(clave, "AES"),
+            javax.crypto.spec.IvParameterSpec(iv),
+        )
+        val cifrado = aes.doFinal(claro)
+
+        assertEquals("f58c4c04d6e5f1ba779eabfb5f7bfbd6", cifrado.copyOf(16).toHexString())
+        assertEquals(claro.toHexString(), aes256CbcDescifrar(clave, iv, cifrado).toHexString())
+    }
+
     @Test
     fun igualesComparaElContenido() {
         assertTrue(iguales(byteArrayOf(1, 2), byteArrayOf(1, 2)))
