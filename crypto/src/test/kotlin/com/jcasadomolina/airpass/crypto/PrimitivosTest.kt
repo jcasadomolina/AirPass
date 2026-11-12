@@ -76,6 +76,32 @@ class PrimitivosTest {
         assertEquals(claro.toHexString(), aes256CbcDescifrar(clave, iv, cifrado).toHexString())
     }
 
+    // RFC 8439, apartado 2.4.2: primeros 16 bytes del texto cifrado.
+    @Test
+    fun chaCha20VectorRfc8439() {
+        val clave = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f".hexToByteArray()
+        val nonce = "000000000000004a00000000".hexToByteArray()
+        val claro = ("Ladies and Gentlemen of the class of '99: If I could offer you " +
+            "only one tip for the future, sunscreen would be it.").toByteArray()
+
+        val cifrado = FlujoChaCha20(clave, nonce, contador = 1).aplicar(claro)
+
+        assertEquals("6e2e359a2568f98041ba0728dd0d6981", cifrado.copyOf(16).toHexString())
+    }
+
+    @Test
+    fun chaCha20ContinuaElFlujoEntreLlamadas() {
+        val clave = ByteArray(32) { 7 }
+        val nonce = ByteArray(12) { 9 }
+        val datos = ByteArray(100) { it.toByte() }
+
+        val deUnaVez = FlujoChaCha20(clave, nonce).aplicar(datos)
+        val flujo = FlujoChaCha20(clave, nonce)
+        val enDosPartes = flujo.aplicar(datos.copyOf(30)) + flujo.aplicar(datos.copyOfRange(30, 100))
+
+        assertEquals(deUnaVez.toHexString(), enDosPartes.toHexString())
+    }
+
     @Test
     fun igualesComparaElContenido() {
         assertTrue(iguales(byteArrayOf(1, 2), byteArrayOf(1, 2)))

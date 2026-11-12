@@ -3,6 +3,7 @@ package com.jcasadomolina.airpass.crypto
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.Mac
+import javax.crypto.spec.ChaCha20ParameterSpec
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
@@ -45,4 +46,18 @@ fun aes256CbcDescifrar(clave: ByteArray, iv: ByteArray, datos: ByteArray): ByteA
     val aes = Cipher.getInstance("AES/CBC/PKCS5Padding")
     aes.init(Cipher.DECRYPT_MODE, SecretKeySpec(clave, "AES"), IvParameterSpec(iv))
     return aes.doFinal(datos)
+}
+
+// Cifrado de flujo ChaCha20 (RFC 8439). Cifrar y descifrar son la misma operación.
+// Guarda la posición: cada llamada continúa el flujo donde lo dejó la anterior.
+class FlujoChaCha20(clave: ByteArray, nonce: ByteArray, contador: Int = 0) {
+    private val cifrador = Cipher.getInstance("ChaCha20")
+
+    init {
+        require(clave.size == 32) { "La clave de ChaCha20 debe medir 32 bytes" }
+        require(nonce.size == 12) { "El nonce de ChaCha20 debe medir 12 bytes" }
+        cifrador.init(Cipher.ENCRYPT_MODE, SecretKeySpec(clave, "ChaCha20"), ChaCha20ParameterSpec(nonce, contador))
+    }
+
+    fun aplicar(datos: ByteArray): ByteArray = cifrador.update(datos) ?: ByteArray(0)
 }
