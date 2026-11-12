@@ -101,3 +101,34 @@
 
 **Para repasar**
 - Los pasos 3 y 4 no los escribí yo. Conviene releer `CabeceraKdbx.kt` y `ClavesKdbx.kt` con los temas 10 y 11 delante hasta poder explicar cada línea.
+
+
+## Sesión 6 · 2026-11-12: del contenido cifrado a las entradas
+
+**Qué se hizo**
+1. Fusioné los pull requests de la cabecera, las claves y los apuntes de las sesiones 3 a 5.
+2. Lectura de los bloques del contenido con verificación del HMAC de cada uno, descifrado AES-256-CBC, descompresión y cabecera interna, con `descifrarKdbx` → [tema 13](temas/13-autenticar-y-descifrar-el-contenido.md).
+3. Lectura del XML y descifrado de los campos protegidos con ChaCha20, con `leerXmlKdbx` → [tema 14](temas/14-el-xml-y-los-campos-protegidos.md).
+4. AirPass lee de principio a fin el fichero de prueba y obtiene el título, el usuario y la contraseña de la entrada creada en KeePass.
+
+El código y los tests de los pasos 2 y 3 los escribió el asistente y me los explicó.
+
+**Decisiones tomadas**
+- Un bloque que no supera el HMAC es un error distinto de la contraseña incorrecta: `FicheroManipuladoException`.
+- El XML se analiza con los DTD desactivados, aunque el contenido esté autenticado.
+- Los valores protegidos se guardan como `ByteArray`.
+
+**Decisiones pendientes**
+- Cómo proteger en memoria las contraseñas ya descifradas (`SR-06`).
+- Tope de tamaño al descomprimir.
+- Crear ficheros de prueba con KeePassXC (Argon2 y ChaCha20) y uno con varios bloques.
+
+**Lo que aprendí**
+- El HMAC de cada bloque cubre el índice y la longitud además de los datos, y por eso no se pueden reordenar ni recortar bloques.
+- Un formato autenticado necesita autenticar también dónde termina: para eso existe el bloque final vacío.
+- Se autentica antes de descifrar. Hacerlo al revés abre la puerta al *padding oracle*.
+- El cifrado interno usa un único flujo para todo el documento. Saltarse un valor protegido estropea los siguientes sin dar ningún error.
+- Todos los primitivos usados hasta ahora están en el JDK. BouncyCastle solo hará falta para Argon2.
+
+**Para repasar**
+- Releer `ContenidoKdbx.kt` y `XmlKdbx.kt` con los temas 13 y 14 delante, y contestar sus preguntas de repaso.

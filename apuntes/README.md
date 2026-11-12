@@ -21,3 +21,5 @@ Apuntes técnicos y teóricos de lo que voy aprendiendo mientras construyo AirPa
 | 10 | [Leer un formato binario](temas/10-leer-un-formato-binario.md) | Firma, *little-endian*, enteros con signo, TLV, validación de longitudes, cabecera de KDBX 4 |
 | 11 | [De la contraseña a las claves](temas/11-de-la-contrasena-a-las-claves.md) | Clave compuesta, AES-KDF, claves de cifrado y de HMAC, hash frente a HMAC, tiempo constante |
 | 12 | [Git en el día a día](temas/12-git-en-el-dia-a-dia.md) | *Staging*, dividir commits, gitflow, finales de línea, `.gitignore`, corregir errores |
+| 13 | [Autenticar y descifrar el contenido](temas/13-autenticar-y-descifrar-el-contenido.md) | Bloques con HMAC, bloque final, AES-CBC, relleno, *padding oracle*, compresión, cabecera interna |
+| 14 | [El XML y los campos protegidos](temas/14-el-xml-y-los-campos-protegidos.md) | Cifrado de flujo, ChaCha20, cifrado interno, orden del flujo, XXE, defensa en profundidad |
