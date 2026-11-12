@@ -16,3 +16,8 @@ Apuntes técnicos y teóricos de lo que voy aprendiendo mientras construyo AirPa
 | 05 | [Secretos en memoria](temas/05-secretos-en-memoria.md) | Volcados de memoria, GC, borrado de búferes, CVE-2023-32784 |
 | 06 | [Decisiones de arquitectura (ADR)](temas/06-decisiones-de-arquitectura.md) | Estructura de un ADR, compromisos de seguridad, criterios que distinguen |
 | 07 | [No inventes tu criptografía](temas/07-no-inventes-tu-criptografia.md) | Primitivos frente a composición, errores típicos, oráculos de prueba, cadena de suministro |
+| 08 | [Módulos de Gradle](temas/08-modulos-de-gradle.md) | Subproyectos, plugins frente a dependencias, `implementation` frente a `api`, `src/main` y `src/test` |
+| 09 | [Tests y vectores de prueba](temas/09-tests-y-vectores-de-prueba.md) | Anatomía de un test, vectores oficiales, fichero real como oráculo, casos malos |
+| 10 | [Leer un formato binario](temas/10-leer-un-formato-binario.md) | Firma, *little-endian*, enteros con signo, TLV, validación de longitudes, cabecera de KDBX 4 |
+| 11 | [De la contraseña a las claves](temas/11-de-la-contrasena-a-las-claves.md) | Clave compuesta, AES-KDF, claves de cifrado y de HMAC, hash frente a HMAC, tiempo constante |
+| 12 | [Git en el día a día](temas/12-git-en-el-dia-a-dia.md) | *Staging*, dividir commits, gitflow, finales de línea, `.gitignore`, corregir errores |
