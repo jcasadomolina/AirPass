@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+  # Permite lanzarla a mano desde la pestaña Actions o con gh workflow run.
+  workflow_dispatch:
   push:
     branches: [main, develop]
 
