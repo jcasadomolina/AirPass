@@ -36,13 +36,7 @@ fun leerCabeceraKdbx(datos: ByteArray): CabeceraKdbx {
     while (true) {
         require(lector.remaining() >= 5) { "La cabecera termina sin el campo de fin" }
         val tipo = lector.get().toInt()
-        val longitud = lector.getInt()
-        // La longitud la declara el fichero: se comprueba antes de reservar memoria.
-        require(longitud in 0..lector.remaining()) {
-            "El campo $tipo de la cabecera declara una longitud imposible: $longitud"
-        }
-        val valor = ByteArray(longitud)
-        lector.get(valor)
+        val valor = lector.leerBytes(lector.getInt(), "El campo $tipo de la cabecera")
         if (tipo == FIN) break
         campos[tipo] = valor
     }
