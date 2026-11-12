@@ -60,7 +60,7 @@ fun derivarClaves(datos: ByteArray, cabecera: CabeceraKdbx, contrasena: CharArra
     base.fill(0)
 
     // La cabecera se autentica con el bloque de índice 2^64 - 1 (ocho bytes 0xFF).
-    val claveCabecera = sha512(ByteArray(8) { 0xFF.toByte() } + claves.hmac)
+    val claveCabecera = claveDeBloque(-1, claves.hmac)
     val correcta = iguales(hmacSha256(claveCabecera, bytesCabecera), datos.copyOfRange(fin + 32, fin + 64))
     claveCabecera.fill(0)
 

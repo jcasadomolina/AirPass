@@ -3,6 +3,7 @@ package com.jcasadomolina.airpass.crypto
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.Mac
+import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 fun sha512(datos: ByteArray): ByteArray =
@@ -33,4 +34,15 @@ fun aesKdf(clave: ByteArray, semilla: ByteArray, rondas: Long): ByteArray {
     val transformada = sha256(bloque)
     bloque.fill(0)
     return transformada
+}
+
+// AES-256 en modo CBC con relleno PKCS#7. Los datos deben estar ya autenticados:
+// descifrar sin verificar antes el HMAC expone a ataques de relleno (padding oracle).
+fun aes256CbcDescifrar(clave: ByteArray, iv: ByteArray, datos: ByteArray): ByteArray {
+    require(clave.size == 32) { "La clave de AES-256 debe medir 32 bytes" }
+    require(iv.size == 16) { "El vector de inicialización de AES-CBC debe medir 16 bytes" }
+
+    val aes = Cipher.getInstance("AES/CBC/PKCS5Padding")
+    aes.init(Cipher.DECRYPT_MODE, SecretKeySpec(clave, "AES"), IvParameterSpec(iv))
+    return aes.doFinal(datos)
 }
