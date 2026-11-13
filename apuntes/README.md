@@ -25,3 +25,4 @@ Apuntes técnicos y teóricos de lo que voy aprendiendo mientras construyo AirPa
 | 14 | [El XML y los campos protegidos](temas/14-el-xml-y-los-campos-protegidos.md) | Cifrado de flujo, ChaCha20, cifrado interno, orden del flujo, XXE, defensa en profundidad |
 | 15 | [La interfaz y los secretos](temas/15-la-interfaz-y-los-secretos.md) | Puerta de entrada única, hilos, mensajes de error, límite de `String`, portapapeles de Windows |
 | 16 | [Integración continua y cadena de suministro](temas/16-ci-y-cadena-de-suministro.md) | CI, acciones fijadas por hash, mínimo privilegio, wrapper de Gradle, `SECURITY.md` |
+| 17 | [Argon2 y la primera dependencia](temas/17-argon2-y-la-primera-dependencia.md) | Funciones duras en memoria, variantes de Argon2, parámetros no autenticados, BouncyCastle, corpus |

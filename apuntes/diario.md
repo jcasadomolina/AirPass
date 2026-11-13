@@ -165,3 +165,35 @@ El código de los tres pasos lo escribió el asistente y me lo explicó.
 
 **Para repasar**
 - Releer `Escritorio.kt` y `Portapapeles.kt` con el tema 15 delante, y `ci.yml` con el tema 16.
+
+
+## Sesión 8 · 2026-11-13: Argon2 y los ficheros de KeePassXC
+
+**Qué se hizo**
+1. Primera dependencia externa: BouncyCastle 1.86, solo en `crypto`.
+2. Argon2d y Argon2id, con los vectores de la RFC 9106 y límites a los parámetros que pide el fichero → [tema 17](temas/17-argon2-y-la-primera-dependencia.md).
+3. Creé con KeePassXC tres ficheros de prueba: AES con Argon2d, AES con Argon2id y ChaCha20 con Argon2id.
+4. ChaCha20 como cifrado externo. AirPass abre los cuatro ficheros del corpus.
+
+El código y los tests los escribió el asistente y me los explicó. Los ficheros de prueba los creé yo.
+
+**Decisiones tomadas**
+- BouncyCastle 1.86 en lugar de la 1.87, publicada el día anterior.
+- Límites de Argon2: 1 GiB de memoria, 100 iteraciones y 64 hilos.
+- Los apuntes van como un commit más en la rama del código que documentan, en lugar de en una rama propia por sesión.
+
+**Decisiones pendientes**
+- Tope de rondas para AES-KDF.
+- Verificación de dependencias de Gradle.
+- Borrar las ramas ya fusionadas y activar el borrado automático en GitHub.
+
+**Lo que aprendí**
+- Argon2 encarece el ataque por memoria, no solo por tiempo.
+- Los parámetros de la KDF se usan antes de poder autenticar la cabecera: son entrada no fiable y necesitan límites.
+- Rebajar esos parámetros no ayuda al atacante, porque cambia la clave y el HMAC deja de coincidir.
+- Una dependencia nueva se añade solo donde hace falta, con versión fija y sin estrenar la última.
+- Gradle fallaba con «Unable to delete directory» porque las carpetas `build` tenían el atributo de solo lectura de Windows, que Gradle no sabe borrar. La primera hipótesis, que VS Code retenía los ficheros, era falsa: se comprobó que ningún proceso los tenía abiertos. Se arregla con `attrib -R` sobre las carpetas. No se sabe qué puso el atributo.
+- Un mensaje de error describe un síntoma y propone una causa; la causa hay que comprobarla antes de darla por buena.
+
+**Para repasar**
+- Releer `Argon2.kt` y la función `transformarClave` con el tema 17 delante.
