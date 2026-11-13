@@ -47,10 +47,10 @@ KeePass 2.62 crea los ficheros nuevos con AES-KDF y 600 000 rondas. KeePassXC us
 ## Qué hace AirPass
 - `derivarClaves` comprueba primero el SHA-256 de la cabecera (error: fichero dañado) y después el HMAC (error: `ClaveIncorrectaException`).
 - La contraseña se recibe como `CharArray` y se convierte a UTF-8 sin pasar por `String`. Los valores intermedios se rellenan con ceros en cuanto dejan de hacer falta (`SR-06`).
-- Los primitivos (`sha256`, `sha512`, `hmacSha256`, `aesKdf`, `iguales`) están en `crypto` y vienen del JDK. BouncyCastle no ha hecho falta todavía.
+- Los primitivos (`sha256`, `sha512`, `hmacSha256`, `aesKdf`, `iguales`) están en `crypto` y vienen del JDK. BouncyCastle solo se usa para Argon2.
 
 **Pendiente**
-- Argon2d y Argon2id: necesitan BouncyCastle y un fichero de prueba de KeePassXC.
+- ~~Argon2d y Argon2id~~: hecho, ver el [tema 17](17-argon2-y-la-primera-dependencia.md).
 - Fichero clave como segundo componente.
 - Decidir si se limita el número de rondas o se permite cancelar: un fichero malicioso puede declarar miles de millones.
 - Si salta una excepción a mitad de la derivación, algún valor intermedio queda sin borrar hasta que actúe el recolector.

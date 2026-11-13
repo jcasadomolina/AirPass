@@ -20,6 +20,7 @@ Conviene escribir el test antes que el código y **verlo fallar**: así se sabe 
 | AES-256 | FIPS 197, apéndice C.3 | un bloque | `PrimitivosTest`, a través de AES-KDF |
 | AES-256-CBC | NIST SP 800-38A, F.2.5 | un bloque | `PrimitivosTest` |
 | ChaCha20 | RFC 8439, apartado 2.4.2 | un texto de 114 bytes | `PrimitivosTest` |
+| Argon2d y Argon2id | RFC 9106, apartados 5.1 y 5.3 | clave, sal, secreto y datos asociados | `Argon2Test` |
 
 AES-KDF es propio de KeePass y no tiene vectores oficiales. Con una sola ronda equivale a cifrar dos bloques con AES-256, y eso sí tiene vector. Cuando un algoritmo no tiene vectores, se reduce a un caso que sí los tenga.
 

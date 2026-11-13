@@ -1,6 +1,8 @@
 package com.jcasadomolina.airpass.core
 
+import com.jcasadomolina.airpass.crypto.TipoArgon2
 import com.jcasadomolina.airpass.crypto.aesKdf
+import com.jcasadomolina.airpass.crypto.argon2
 import com.jcasadomolina.airpass.crypto.hmacSha256
 import com.jcasadomolina.airpass.crypto.iguales
 import com.jcasadomolina.airpass.crypto.sha256
@@ -13,6 +15,15 @@ class ClaveIncorrectaException : Exception("La clave no es correcta o el fichero
 class ClavesKdbx(val cifrado: ByteArray, val hmac: ByteArray)
 
 private const val AES_KDF = "c9d9f39a628a4460bf740d08c18a4fea"
+private const val ARGON2D = "ef636ddf8c29444b91f7a9a403e30a0c"
+private const val ARGON2ID = "9e298b1956db4773b23dfc3ec6f0a1e6"
+
+// Los parámetros de la KDF se leen antes de poder autenticar la cabecera, así que un
+// fichero manipulado puede pedir cualquier valor. Sin tope, agotaría la memoria.
+// shortcut: límites fijos; hacerlos configurables si un usuario real los supera.
+private const val MAX_MEMORIA_ARGON2 = 1024L * 1024 * 1024
+private const val MAX_ITERACIONES_ARGON2 = 100L
+private const val MAX_PARALELISMO_ARGON2 = 64
 
 // Clave compuesta de KDBX: SHA-256 del SHA-256 de la contraseña en UTF-8.
 // shortcut: solo contraseña, sin fichero clave; añadirlo cuando se implemente RF-01 completo.
@@ -31,13 +42,35 @@ internal fun claveCompuesta(contrasena: CharArray): ByteArray {
 
 internal fun transformarClave(compuesta: ByteArray, parametrosKdf: ByteArray): ByteArray {
     val parametros = leerDiccionarioVariante(parametrosKdf)
-    val kdf = (parametros["\$UUID"] as? ByteArray)?.toHexString()
-    // shortcut: solo AES-KDF; Argon2d/id necesitan BouncyCastle y un fichero de prueba.
-    require(kdf == AES_KDF) { "Función de derivación de claves no compatible: $kdf" }
-
-    val semilla = requireNotNull(parametros["S"] as? ByteArray) { "Falta la semilla de AES-KDF" }
-    val rondas = requireNotNull(parametros["R"] as? Long) { "Faltan las rondas de AES-KDF" }
-    return aesKdf(compuesta, semilla, rondas)
+    return when (val kdf = (parametros["\$UUID"] as? ByteArray)?.toHexString()) {
+        AES_KDF -> {
+            val semilla = requireNotNull(parametros["S"] as? ByteArray) { "Falta la semilla de AES-KDF" }
+            val rondas = requireNotNull(parametros["R"] as? Long) { "Faltan las rondas de AES-KDF" }
+            aesKdf(compuesta, semilla, rondas)
+        }
+        ARGON2D, ARGON2ID -> {
+            val sal = requireNotNull(parametros["S"] as? ByteArray) { "Falta la sal de Argon2" }
+            val memoria = requireNotNull(parametros["M"] as? Long) { "Falta la memoria de Argon2" }
+            val iteraciones = requireNotNull(parametros["I"] as? Long) { "Faltan las iteraciones de Argon2" }
+            val paralelismo = requireNotNull(parametros["P"] as? Int) { "Falta el paralelismo de Argon2" }
+            val version = requireNotNull(parametros["V"] as? Int) { "Falta la versión de Argon2" }
+            require(memoria in 1..MAX_MEMORIA_ARGON2) { "El fichero pide una memoria de Argon2 no admitida: $memoria bytes" }
+            require(iteraciones in 1..MAX_ITERACIONES_ARGON2) { "El fichero pide unas iteraciones de Argon2 no admitidas: $iteraciones" }
+            require(paralelismo in 1..MAX_PARALELISMO_ARGON2) { "El fichero pide un paralelismo de Argon2 no admitido: $paralelismo" }
+            argon2(
+                tipo = if (kdf == ARGON2D) TipoArgon2.D else TipoArgon2.ID,
+                clave = compuesta,
+                sal = sal,
+                iteraciones = iteraciones.toInt(),
+                memoriaKiB = (memoria / 1024).toInt(),
+                paralelismo = paralelismo,
+                version = version,
+                secreto = parametros["K"] as? ByteArray,
+                datosAsociados = parametros["A"] as? ByteArray,
+            )
+        }
+        else -> throw IllegalArgumentException("Función de derivación de claves no compatible: $kdf")
+    }
 }
 
 // Deriva las claves del fichero y comprueba con ellas la cabecera.

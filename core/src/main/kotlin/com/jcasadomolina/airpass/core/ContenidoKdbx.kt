@@ -1,5 +1,6 @@
 package com.jcasadomolina.airpass.core
 
+import com.jcasadomolina.airpass.crypto.FlujoChaCha20
 import com.jcasadomolina.airpass.crypto.aes256CbcDescifrar
 import com.jcasadomolina.airpass.crypto.hmacSha256
 import com.jcasadomolina.airpass.crypto.iguales
@@ -54,12 +55,12 @@ internal fun leerBloquesAutenticados(datos: ByteArray, inicio: Int, claveHmac: B
 }
 
 fun descifrarKdbx(datos: ByteArray, cabecera: CabeceraKdbx, claves: ClavesKdbx): ContenidoKdbx {
-    // shortcut: solo AES-256; ChaCha20 necesita un fichero de prueba antes de darlo por bueno.
-    require(cabecera.cifrado == Cifrado.AES256) { "Cifrado no compatible todavía: ${cabecera.cifrado}" }
-
     // Primero se autentica y solo después se descifra.
     val cifrado = leerBloquesAutenticados(datos, cabecera.longitud + 64, claves.hmac)
-    val descifrado = aes256CbcDescifrar(claves.cifrado, cabecera.iv, cifrado)
+    val descifrado = when (cabecera.cifrado) {
+        Cifrado.AES256 -> aes256CbcDescifrar(claves.cifrado, cabecera.iv, cifrado)
+        Cifrado.CHACHA20 -> FlujoChaCha20(claves.cifrado, cabecera.iv).aplicar(cifrado)
+    }
     val claro =
         if (cabecera.comprimido) {
             // shortcut: sin tope de tamaño al descomprimir; el contenido está autenticado,

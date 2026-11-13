@@ -61,7 +61,7 @@ Detrás va el XML. El cifrado interno se explica en el [tema 14](14-el-xml-y-los
 - Las longitudes de los bloques pasan por `leerBytes`, la misma validación que la cabecera.
 
 **Pendiente**
-- ChaCha20 como cifrado externo: se rechaza hasta tener un fichero de prueba.
+- ~~ChaCha20 como cifrado externo~~: hecho, ver el [tema 17](17-argon2-y-la-primera-dependencia.md).
 - Tope de tamaño al descomprimir.
 - Adjuntos.
 - Un fichero de prueba con varios bloques, para ejercer la protección contra el reordenado.
