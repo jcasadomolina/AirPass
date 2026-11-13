@@ -1,6 +1,7 @@
 package com.jcasadomolina.airpass.crypto
 
 import java.security.MessageDigest
+import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.spec.ChaCha20ParameterSpec
@@ -60,4 +61,24 @@ class FlujoChaCha20(clave: ByteArray, nonce: ByteArray, contador: Int = 0) {
     }
 
     fun aplicar(datos: ByteArray): ByteArray = cifrador.update(datos) ?: ByteArray(0)
+}
+
+private val generador = SecureRandom()
+
+// Bytes de un generador criptográfico: impredecibles aunque se conozcan los anteriores.
+// java.util.Random no sirve para esto, porque su secuencia se puede reconstruir.
+fun bytesAleatorios(cantidad: Int): ByteArray {
+    val bytes = ByteArray(cantidad)
+    generador.nextBytes(bytes)
+    return bytes
+}
+
+// El vector de inicialización debe ser nuevo y aleatorio en cada cifrado con la misma clave.
+fun aes256CbcCifrar(clave: ByteArray, iv: ByteArray, datos: ByteArray): ByteArray {
+    require(clave.size == 32) { "La clave de AES-256 debe medir 32 bytes" }
+    require(iv.size == 16) { "El vector de inicialización de AES-CBC debe medir 16 bytes" }
+
+    val aes = Cipher.getInstance("AES/CBC/PKCS5Padding")
+    aes.init(Cipher.ENCRYPT_MODE, SecretKeySpec(clave, "AES"), IvParameterSpec(iv))
+    return aes.doFinal(datos)
 }
