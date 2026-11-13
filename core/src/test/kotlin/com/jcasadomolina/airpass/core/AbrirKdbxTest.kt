@@ -15,7 +15,7 @@ class AbrirKdbxTest {
 
     @Test
     fun abreElFicheroConLaContrasenaCorrecta() {
-        val raiz = abrirKdbx(fichero, "airpass-test".toCharArray())
+        val raiz = abrirKdbx(fichero, "airpass-test".toCharArray()).raiz
 
         assertTrue(todasLasEntradas(raiz).any { it.campos["Title"] == "Entrada de prueba" })
     }
@@ -31,7 +31,7 @@ class AbrirKdbxTest {
         )
         for (nombre in corpus) {
             val datos = javaClass.getResource("/$nombre")!!.readBytes()
-            val raiz = abrirKdbx(datos, "airpass-test".toCharArray())
+            val raiz = abrirKdbx(datos, "airpass-test".toCharArray()).raiz
             val entrada = todasLasEntradas(raiz).singleOrNull { it.campos["Title"] == "Entrada de prueba" }
 
             assertEquals("usuario", entrada?.campos?.get("UserName"), nombre)
@@ -55,10 +55,10 @@ class AbrirKdbxTest {
 
     @Test
     fun borrarSecretosDejaLasContrasenasACero() {
-        val raiz = abrirKdbx(fichero, "airpass-test".toCharArray())
-        val entrada = todasLasEntradas(raiz).single { it.campos["Title"] == "Entrada de prueba" }
+        val base = abrirKdbx(fichero, "airpass-test".toCharArray())
+        val entrada = todasLasEntradas(base.raiz).single { it.campos["Title"] == "Entrada de prueba" }
 
-        raiz.borrarSecretos()
+        base.borrarSecretos()
 
         assertEquals(List(10) { 0.toByte() }, entrada.protegidos.getValue("Password").toList())
     }

@@ -1,5 +1,6 @@
 package com.jcasadomolina.airpass.core
 
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -14,8 +15,10 @@ class CabeceraKdbx(
     val comprimido: Boolean,
     val semillaMaestra: ByteArray,
     val iv: ByteArray,
-    // shortcut: diccionario de la KDF sin interpretar, se analizará al derivar la clave
+    // Diccionario de la KDF tal como viene en el fichero; lo interpreta transformarClave.
     val parametrosKdf: ByteArray,
+    // Datos de otros programas (campo 12). AirPass no los interpreta, pero los conserva.
+    val datosPublicos: ByteArray?,
     val longitud: Int,
 )
 
@@ -25,6 +28,7 @@ private const val COMPRESION = 3
 private const val SEMILLA_MAESTRA = 4
 private const val IV = 7
 private const val PARAMETROS_KDF = 11
+private const val DATOS_PUBLICOS = 12
 
 fun leerCabeceraKdbx(datos: ByteArray): CabeceraKdbx {
     val version = leerVersionKdbx(datos)
@@ -65,6 +69,37 @@ fun leerCabeceraKdbx(datos: ByteArray): CabeceraKdbx {
         semillaMaestra = campo(SEMILLA_MAESTRA, "semilla maestra", 32),
         iv = campo(IV, "vector de inicialización", cifrado.longitudIv),
         parametrosKdf = campo(PARAMETROS_KDF, "parámetros de la KDF"),
+        datosPublicos = campos[DATOS_PUBLICOS],
         longitud = lector.position(),
     )
+}
+
+// Escribe una cabecera nueva. Mismo orden de campos que KeePass.
+internal fun escribirCabeceraKdbx(
+    version: VersionKdbx,
+    cifrado: Cifrado,
+    comprimido: Boolean,
+    semillaMaestra: ByteArray,
+    iv: ByteArray,
+    parametrosKdf: ByteArray,
+    datosPublicos: ByteArray?,
+): ByteArray {
+    val salida = ByteArrayOutputStream()
+    fun campo(tipo: Int, valor: ByteArray) {
+        salida.write(tipo)
+        salida.write(enteroLe(valor.size))
+        salida.write(valor)
+    }
+
+    salida.write(enteroLe(0x9AA2D903.toInt()))
+    salida.write(enteroLe(0xB54BFB67.toInt()))
+    salida.write(enteroLe((version.mayor shl 16) or version.menor))
+    campo(CIFRADO, cifrado.id.hexToByteArray())
+    campo(COMPRESION, enteroLe(if (comprimido) 1 else 0))
+    campo(SEMILLA_MAESTRA, semillaMaestra)
+    campo(IV, iv)
+    campo(PARAMETROS_KDF, parametrosKdf)
+    if (datosPublicos != null) campo(DATOS_PUBLICOS, datosPublicos)
+    campo(FIN, byteArrayOf(0x0D, 0x0A, 0x0D, 0x0A))
+    return salida.toByteArray()
 }
