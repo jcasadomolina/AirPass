@@ -21,9 +21,9 @@ private const val ARGON2ID = "9e298b1956db4773b23dfc3ec6f0a1e6"
 // Los parámetros de la KDF se leen antes de poder autenticar la cabecera, así que un
 // fichero manipulado puede pedir cualquier valor. Sin tope, agotaría la memoria.
 // shortcut: límites fijos; hacerlos configurables si un usuario real los supera.
-private const val MAX_MEMORIA_ARGON2 = 1024L * 1024 * 1024
-private const val MAX_ITERACIONES_ARGON2 = 100L
-private const val MAX_PARALELISMO_ARGON2 = 64
+private const val MAX_MEMORIA_ARGON2 = 1_073_741_824uL // 1 GiB
+private const val MAX_ITERACIONES_ARGON2 = 100uL
+private const val MAX_PARALELISMO_ARGON2 = 64u
 
 // Clave compuesta de KDBX: SHA-256 del SHA-256 de la contraseña en UTF-8.
 // shortcut: solo contraseña, sin fichero clave; añadirlo cuando se implemente RF-01 completo.
@@ -45,32 +45,41 @@ internal fun transformarClave(compuesta: ByteArray, parametrosKdf: ByteArray): B
     return when (val kdf = (parametros["\$UUID"] as? ByteArray)?.toHexString()) {
         AES_KDF -> {
             val semilla = requireNotNull(parametros["S"] as? ByteArray) { "Falta la semilla de AES-KDF" }
-            val rondas = requireNotNull(parametros["R"] as? Long) { "Faltan las rondas de AES-KDF" }
-            aesKdf(compuesta, semilla, rondas)
+            val rondas = requireNotNull(parametros["R"] as? ULong) { "Faltan las rondas de AES-KDF" }
+            require(rondas <= Long.MAX_VALUE.toULong()) { "Número de rondas de AES-KDF no válido: $rondas" }
+            aesKdf(compuesta, semilla, rondas.toLong())
         }
         ARGON2D, ARGON2ID -> {
             val sal = requireNotNull(parametros["S"] as? ByteArray) { "Falta la sal de Argon2" }
-            val memoria = requireNotNull(parametros["M"] as? Long) { "Falta la memoria de Argon2" }
-            val iteraciones = requireNotNull(parametros["I"] as? Long) { "Faltan las iteraciones de Argon2" }
-            val paralelismo = requireNotNull(parametros["P"] as? Int) { "Falta el paralelismo de Argon2" }
-            val version = requireNotNull(parametros["V"] as? Int) { "Falta la versión de Argon2" }
-            require(memoria in 1..MAX_MEMORIA_ARGON2) { "El fichero pide una memoria de Argon2 no admitida: $memoria bytes" }
-            require(iteraciones in 1..MAX_ITERACIONES_ARGON2) { "El fichero pide unas iteraciones de Argon2 no admitidas: $iteraciones" }
-            require(paralelismo in 1..MAX_PARALELISMO_ARGON2) { "El fichero pide un paralelismo de Argon2 no admitido: $paralelismo" }
+            val memoria = requireNotNull(parametros["M"] as? ULong) { "Falta la memoria de Argon2" }
+            val iteraciones = requireNotNull(parametros["I"] as? ULong) { "Faltan las iteraciones de Argon2" }
+            val paralelismo = requireNotNull(parametros["P"] as? UInt) { "Falta el paralelismo de Argon2" }
+            val version = requireNotNull(parametros["V"] as? UInt) { "Falta la versión de Argon2" }
+            require(memoria in 1uL..MAX_MEMORIA_ARGON2) { "El fichero pide una memoria de Argon2 no admitida: $memoria bytes" }
+            require(iteraciones in 1uL..MAX_ITERACIONES_ARGON2) { "El fichero pide unas iteraciones de Argon2 no admitidas: $iteraciones" }
+            require(paralelismo in 1u..MAX_PARALELISMO_ARGON2) { "El fichero pide un paralelismo de Argon2 no admitido: $paralelismo" }
             argon2(
                 tipo = if (kdf == ARGON2D) TipoArgon2.D else TipoArgon2.ID,
                 clave = compuesta,
                 sal = sal,
                 iteraciones = iteraciones.toInt(),
-                memoriaKiB = (memoria / 1024).toInt(),
-                paralelismo = paralelismo,
-                version = version,
+                memoriaKiB = (memoria / 1024uL).toInt(),
+                paralelismo = paralelismo.toInt(),
+                version = version.toInt(),
                 secreto = parametros["K"] as? ByteArray,
                 datosAsociados = parametros["A"] as? ByteArray,
             )
         }
         else -> throw IllegalArgumentException("Función de derivación de claves no compatible: $kdf")
     }
+}
+
+// Claves finales a partir de la semilla maestra y de la clave transformada.
+internal fun clavesFinales(semillaMaestra: ByteArray, transformada: ByteArray): ClavesKdbx {
+    val base = semillaMaestra + transformada
+    val claves = ClavesKdbx(cifrado = sha256(base), hmac = sha512(base + 0x01))
+    base.fill(0)
+    return claves
 }
 
 // Deriva las claves del fichero y comprueba con ellas la cabecera.
@@ -87,10 +96,8 @@ fun derivarClaves(datos: ByteArray, cabecera: CabeceraKdbx, contrasena: CharArra
     val transformada = transformarClave(compuesta, cabecera.parametrosKdf)
     compuesta.fill(0)
 
-    val base = cabecera.semillaMaestra + transformada
+    val claves = clavesFinales(cabecera.semillaMaestra, transformada)
     transformada.fill(0)
-    val claves = ClavesKdbx(cifrado = sha256(base), hmac = sha512(base + 0x01))
-    base.fill(0)
 
     // La cabecera se autentica con el bloque de índice 2^64 - 1 (ocho bytes 0xFF).
     val claveCabecera = claveDeBloque(-1, claves.hmac)

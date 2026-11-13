@@ -33,12 +33,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.jcasadomolina.airpass.core.BaseDeDatos
 import com.jcasadomolina.airpass.core.ClaveIncorrectaException
 import com.jcasadomolina.airpass.core.Entrada
 import com.jcasadomolina.airpass.core.FicheroManipuladoException
 import com.jcasadomolina.airpass.core.Grupo
 import com.jcasadomolina.airpass.core.abrirKdbx
-import com.jcasadomolina.airpass.core.borrarSecretos
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
@@ -53,17 +53,17 @@ import kotlinx.coroutines.withContext
 fun Escritorio() {
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            var raiz by remember { mutableStateOf<Grupo?>(null) }
-            val abierta = raiz
+            var base by remember { mutableStateOf<BaseDeDatos?>(null) }
+            val abierta = base
             if (abierta == null) {
-                PantallaAbrir(alAbrir = { raiz = it })
+                PantallaAbrir(alAbrir = { base = it })
             } else {
                 PantallaEntradas(
-                    raiz = abierta,
+                    raiz = abierta.raiz,
                     alBloquear = {
                         Portapapeles.borrar()
                         abierta.borrarSecretos()
-                        raiz = null
+                        base = null
                     },
                 )
             }
@@ -79,7 +79,7 @@ private fun elegirFichero(): File? {
 }
 
 @Composable
-private fun PantallaAbrir(alAbrir: (Grupo) -> Unit) {
+private fun PantallaAbrir(alAbrir: (BaseDeDatos) -> Unit) {
     var fichero by remember { mutableStateOf<File?>(null) }
     // shortcut: el campo de texto de Compose guarda la contraseña en un String, que no se
     // puede borrar de la memoria; sustituirlo por un campo propio al endurecer SR-06.

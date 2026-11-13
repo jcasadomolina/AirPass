@@ -21,7 +21,7 @@ class XmlKdbxTest {
         val cabecera = leerCabeceraKdbx(fichero)
         val claves = derivarClaves(fichero, cabecera, "airpass-test".toCharArray())
 
-        val raiz = leerXmlKdbx(descifrarKdbx(fichero, cabecera, claves))
+        val raiz = leerXmlKdbx(descifrarKdbx(fichero, cabecera, claves)).raiz
         val entrada = todasLasEntradas(raiz).single { it.campos["Title"] == "Entrada de prueba" }
 
         assertEquals("usuario", entrada.campos["UserName"])
@@ -48,7 +48,7 @@ class XmlKdbxTest {
             $segunda
             </Group></Root></KeePassFile>"""
 
-        val raiz = leerXmlKdbx(contenidoCon(xml, claveInterna))
+        val raiz = leerXmlKdbx(contenidoCon(xml, claveInterna)).raiz
 
         assertEquals("Raíz", raiz.nombre)
         assertEquals(

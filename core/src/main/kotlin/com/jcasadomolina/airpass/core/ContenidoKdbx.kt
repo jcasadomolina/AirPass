@@ -15,7 +15,13 @@ class FicheroManipuladoException : Exception("El contenido del fichero ha sido m
 
 // Contenido descifrado. El XML lleva los campos protegidos (las contraseñas) cifrados
 // todavía con el cifrado interno, cuya clave es `claveInterna`.
-class ContenidoKdbx(val cifradoInterno: Int, val claveInterna: ByteArray, val xml: ByteArray)
+class ContenidoKdbx(
+    val cifradoInterno: Int,
+    val claveInterna: ByteArray,
+    val xml: ByteArray,
+    // Adjuntos de la cabecera interna. AirPass no los muestra todavía, pero los conserva.
+    val adjuntos: List<ByteArray> = emptyList(),
+)
 
 // Clave del HMAC de cada bloque: SHA-512(índice ‖ clave de HMAC). El índice -1 es el de la cabecera.
 internal fun claveDeBloque(indice: Long, claveHmac: ByteArray): ByteArray {
@@ -54,6 +60,32 @@ internal fun leerBloquesAutenticados(datos: ByteArray, inicio: Int, claveHmac: B
     return salida.toByteArray()
 }
 
+// Trocea los datos en bloques y antepone a cada uno su HMAC. Termina con un bloque vacío.
+internal fun escribirBloquesAutenticados(
+    datos: ByteArray,
+    claveHmac: ByteArray,
+    tamanoBloque: Int = 1024 * 1024,
+): ByteArray {
+    val salida = ByteArrayOutputStream()
+    var indice = 0L
+    var posicion = 0
+    while (true) {
+        val longitud = minOf(tamanoBloque, datos.size - posicion)
+        val autenticado = ByteBuffer.allocate(12 + longitud).order(ByteOrder.LITTLE_ENDIAN)
+            .putLong(indice).putInt(longitud).put(datos, posicion, longitud).array()
+        val clave = claveDeBloque(indice, claveHmac)
+        salida.write(hmacSha256(clave, autenticado))
+        clave.fill(0)
+        salida.write(enteroLe(longitud))
+        salida.write(datos, posicion, longitud)
+
+        if (longitud == 0) break
+        posicion += longitud
+        indice++
+    }
+    return salida.toByteArray()
+}
+
 fun descifrarKdbx(datos: ByteArray, cabecera: CabeceraKdbx, claves: ClavesKdbx): ContenidoKdbx {
     // Primero se autentica y solo después se descifra.
     val cifrado = leerBloquesAutenticados(datos, cabecera.longitud + 64, claves.hmac)
@@ -76,6 +108,7 @@ fun descifrarKdbx(datos: ByteArray, cabecera: CabeceraKdbx, claves: ClavesKdbx):
     val lector = ByteBuffer.wrap(claro).order(ByteOrder.LITTLE_ENDIAN)
     var cifradoInterno: Int? = null
     var claveInterna: ByteArray? = null
+    val adjuntos = ArrayList<ByteArray>()
     while (true) {
         require(lector.remaining() >= 5) { "La cabecera interna termina sin el campo de fin" }
         val tipo = lector.get().toInt()
@@ -87,7 +120,7 @@ fun descifrarKdbx(datos: ByteArray, cabecera: CabeceraKdbx, claves: ClavesKdbx):
                 cifradoInterno = ByteBuffer.wrap(valor).order(ByteOrder.LITTLE_ENDIAN).getInt()
             }
             2 -> claveInterna = valor
-            // shortcut: los adjuntos (tipo 3) se ignoran hasta implementar RF-02.
+            3 -> adjuntos.add(valor)
         }
     }
 
@@ -95,6 +128,7 @@ fun descifrarKdbx(datos: ByteArray, cabecera: CabeceraKdbx, claves: ClavesKdbx):
         cifradoInterno = requireNotNull(cifradoInterno) { "Falta el cifrado interno" },
         claveInterna = requireNotNull(claveInterna) { "Falta la clave del cifrado interno" },
         xml = claro.copyOfRange(lector.position(), claro.size),
+        adjuntos = adjuntos,
     )
     claro.fill(0)
     return contenido
