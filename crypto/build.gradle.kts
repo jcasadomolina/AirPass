@@ -3,5 +3,6 @@ plugins {
 }
 
 dependencies {
+    implementation(libs.bouncycastle)
     testImplementation(libs.kotlin.test)
 }
