@@ -2,9 +2,6 @@ package com.jcasadomolina.airpass.core
 
 import com.jcasadomolina.airpass.crypto.TipoArgon2
 import com.jcasadomolina.airpass.crypto.argon2
-import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -16,37 +13,14 @@ class Argon2KdbxTest {
     private val compuesta = ByteArray(32) { 5 }
     private val sal = ByteArray(32) { 6 }
 
-    // Construye un diccionario de parámetros como los que escribe KeePass.
-    private fun diccionario(vararg valores: Pair<String, Any>): ByteArray {
-        fun entero(bytes: Int, valor: Long): ByteArray {
-            val buffer = ByteBuffer.allocate(bytes).order(ByteOrder.LITTLE_ENDIAN)
-            if (bytes == 4) buffer.putInt(valor.toInt()) else buffer.putLong(valor)
-            return buffer.array()
-        }
-        val salida = ByteArrayOutputStream()
-        salida.write(byteArrayOf(0x00, 0x01)) // versión 1.0
-        for ((nombre, valor) in valores) {
-            val (tipo, bytes) = when (valor) {
-                is Int -> 0x04 to entero(4, valor.toLong())
-                is Long -> 0x05 to entero(8, valor)
-                else -> 0x42 to valor as ByteArray
-            }
-            salida.write(tipo)
-            salida.write(entero(4, nombre.toByteArray().size.toLong()))
-            salida.write(nombre.toByteArray())
-            salida.write(entero(4, bytes.size.toLong()))
-            salida.write(bytes)
-        }
-        salida.write(0)
-        return salida.toByteArray()
-    }
-
     private fun parametros(
         uuid: ByteArray = argon2id,
-        memoria: Long = 64 * 1024,
-        iteraciones: Long = 2,
-        paralelismo: Int = 2,
-    ) = diccionario("\$UUID" to uuid, "S" to sal, "M" to memoria, "I" to iteraciones, "P" to paralelismo, "V" to 0x13)
+        memoria: ULong = 64uL * 1024uL,
+        iteraciones: ULong = 2uL,
+        paralelismo: UInt = 2u,
+    ) = escribirDiccionarioVariante(
+        linkedMapOf("\$UUID" to uuid, "S" to sal, "M" to memoria, "I" to iteraciones, "P" to paralelismo, "V" to 0x13u),
+    )
 
     @Test
     fun usaArgon2idConLosParametrosDelFichero() {
@@ -67,16 +41,16 @@ class Argon2KdbxTest {
     // Un fichero manipulado puede pedir cualquier cantidad de memoria antes de autenticarse.
     @Test
     fun rechazaUnaMemoriaDesorbitada() {
-        val pide64GiB = parametros(memoria = 64L * 1024 * 1024 * 1024)
+        val pide64GiB = parametros(memoria = 64uL * 1024uL * 1024uL * 1024uL)
 
         assertFailsWith<IllegalArgumentException> { transformarClave(compuesta, pide64GiB) }
     }
 
     @Test
     fun rechazaIteracionesYParalelismoDesorbitados() {
-        assertFailsWith<IllegalArgumentException> { transformarClave(compuesta, parametros(iteraciones = 1_000_000)) }
-        assertFailsWith<IllegalArgumentException> { transformarClave(compuesta, parametros(paralelismo = 100_000)) }
-        assertFailsWith<IllegalArgumentException> { transformarClave(compuesta, parametros(memoria = -1)) }
+        assertFailsWith<IllegalArgumentException> { transformarClave(compuesta, parametros(iteraciones = 1_000_000uL)) }
+        assertFailsWith<IllegalArgumentException> { transformarClave(compuesta, parametros(paralelismo = 100_000u)) }
+        assertFailsWith<IllegalArgumentException> { transformarClave(compuesta, parametros(memoria = ULong.MAX_VALUE)) }
     }
 
     @Test

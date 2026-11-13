@@ -21,7 +21,7 @@ class ClavesKdbxTest {
 
         assertEquals("c9d9f39a628a4460bf740d08c18a4fea", (parametros["\$UUID"] as ByteArray).toHexString())
         assertEquals(32, (parametros["S"] as ByteArray).size)
-        assertTrue(parametros["R"] as Long > 0)
+        assertTrue(parametros["R"] as ULong > 0uL)
     }
 
     @Test
