@@ -197,3 +197,34 @@ El código y los tests los escribió el asistente y me los explicó. Los fichero
 
 **Para repasar**
 - Releer `Argon2.kt` y la función `transformarClave` con el tema 17 delante.
+
+
+## Sesión 9 · 2026-11-13: guardar ficheros
+
+**Qué se hizo**
+1. `guardarKdbx`: AirPass escribe un fichero KDBX completo → [tema 18](temas/18-escribir-sin-perder-nada.md).
+2. `abrirKdbx` devuelve ahora una `BaseDeDatos`, que conserva el documento XML, los adjuntos y la cabecera para no perder nada al guardar.
+3. El lector del diccionario de la KDF distingue todos los tipos, para poder reescribirlo idéntico.
+4. En `crypto`: `bytesAleatorios` y `aes256CbcCifrar`.
+5. Ida y vuelta de los cuatro ficheros del corpus, y comprobación con `keepassxc-cli`: KeePassXC abre lo que escribe AirPass.
+
+El código y los tests los escribió el asistente y me los explicó.
+
+**Decisiones tomadas**
+- Al guardar se conserva todo el contenido del fichero, también lo que AirPass no interpreta.
+- En cada guardado se renuevan la semilla maestra, el vector de inicialización, la clave interna y la sal de la KDF.
+- Guardar exige la contraseña.
+
+**Decisiones pendientes**
+- Cómo obtiene la interfaz la contraseña al guardar: pedirla otra vez o conservarla protegida en memoria.
+- Abrir a mano en KeePass 2.62 los ficheros de `core/build/ida-y-vuelta`.
+
+**Lo que aprendí**
+- Un escritor que solo guarda lo que entiende destruye datos sin avisar.
+- Un lector que alimenta a un escritor no puede descartar detalles, como el tipo exacto de un número.
+- La aleatoriedad para claves sale de `SecureRandom`, no de `Random`.
+- Que un programa lea sus propios ficheros no prueba que estén bien: hace falta un programa independiente.
+- La protección contra el reordenado de bloques existía desde la sesión 6 y no se había probado nunca. Los tests con bloques pequeños la ejercen por fin.
+
+**Para repasar**
+- Releer `GuardarKdbx.kt` con el tema 18 delante, comparándolo paso a paso con `ContenidoKdbx.kt`: es el mismo camino al revés.

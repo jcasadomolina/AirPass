@@ -63,8 +63,8 @@ Detrás va el XML. El cifrado interno se explica en el [tema 14](14-el-xml-y-los
 **Pendiente**
 - ~~ChaCha20 como cifrado externo~~: hecho, ver el [tema 17](17-argon2-y-la-primera-dependencia.md).
 - Tope de tamaño al descomprimir.
-- Adjuntos.
-- Un fichero de prueba con varios bloques, para ejercer la protección contra el reordenado.
+- Los adjuntos se conservan al guardar, pero todavía no se muestran.
+- ~~Probar el reordenado de bloques~~: hecho con bloques pequeños, ver el [tema 18](18-escribir-sin-perder-nada.md).
 
 ## Preguntas de repaso
 1. ¿Qué ataque evita incluir el índice en el HMAC de cada bloque? ¿Y la longitud?
