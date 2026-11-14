@@ -2,6 +2,7 @@ package com.jcasadomolina.airpass.core
 
 import java.io.File
 import java.nio.file.Files
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -71,6 +72,32 @@ class EditarKdbxTest {
             val secreto = reabierta.protegidos.getValue(anterior.protegidosDentro().single())
             assertEquals("secreto123", secreto.toString(Charsets.UTF_8), nombre)
         }
+    }
+
+    @Test
+    fun leeLasFechasYActualizaLaDeModificacion() {
+        for (nombre in listOf(keepass, keepassxc)) {
+            val base = abrir(nombre)
+            val entrada = buscar(base, "Entrada de prueba")!!.second
+            val creada = assertNotNull(entrada.creada, nombre)
+            val modificada = assertNotNull(entrada.modificada, nombre)
+            assertTrue(creada <= modificada, nombre)
+
+            base.modificarEntrada(entrada, "Otra", "usuario", "otra".toCharArray())
+
+            val nueva = buscar(reabrir(base, "fechas-$nombre"), "Otra")!!.second
+            assertEquals(creada, nueva.creada, nombre)
+            assertTrue(nueva.modificada!! > modificada, nombre)
+        }
+    }
+
+    @Test
+    fun leeFechasEnLosDosFormatosYRechazaLasQueNoEntiende() {
+        // 63 713 433 600 s desde el año 1 = 2020-01-01, en Int64 little-endian y Base64.
+        assertEquals(Instant.parse("2020-01-01T00:00:00Z"), leerFecha("ANid1Q4AAAA="))
+        assertEquals(Instant.parse("2020-01-01T00:00:00Z"), leerFecha("2020-01-01T00:00:00Z"))
+        assertNull(leerFecha("no es una fecha"))
+        assertNull(leerFecha(null))
     }
 
     // El fichero de KeePass tiene papelera: la entrada se mueve a ella.

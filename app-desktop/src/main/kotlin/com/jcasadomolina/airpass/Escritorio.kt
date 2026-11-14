@@ -1,6 +1,8 @@
 package com.jcasadomolina.airpass
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -51,6 +56,10 @@ import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
 import java.io.IOException
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -219,6 +228,7 @@ private fun PantallaEntradas(
     var borradoPendiente by remember { mutableStateOf<Job?>(null) }
     var edicion by remember { mutableStateOf<Edicion?>(null) }
     var paraBorrar by remember { mutableStateOf<Entrada?>(null) }
+    var detalle by remember { mutableStateOf<Entrada?>(null) }
     val ambito = rememberCoroutineScope()
 
     fun cambiado() {
@@ -284,6 +294,7 @@ private fun PantallaEntradas(
         LazyColumn {
             items(entradas) { (grupo, entrada) ->
                 ListItem(
+                    modifier = Modifier.clickable(enabled = !guardando) { detalle = entrada },
                     overlineContent = { Text(grupo) },
                     headlineContent = { Text(entrada.campos["Title"].orEmpty().ifEmpty { "(sin título)" }) },
                     supportingContent = { Text(entrada.campos["UserName"].orEmpty()) },
@@ -336,6 +347,94 @@ private fun PantallaEntradas(
             dismissButton = { TextButton(onClick = { paraBorrar = null }) { Text("Cancelar") } },
         )
     }
+    detalle?.let { entrada ->
+        DialogoDetalle(
+            entrada = entrada,
+            alCopiar = { copiarContrasena(entrada) },
+            alEditar = {
+                detalle = null
+                edicion = Edicion(entrada)
+            },
+            alCerrar = { detalle = null },
+        )
+    }
+}
+
+private val formatoFecha: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy, HH:mm", Locale.forLanguageTag("es"))
+        .withZone(ZoneId.systemDefault())
+
+private fun fecha(instante: Instant?): String = instante?.let { formatoFecha.format(it) } ?: "Desconocida"
+
+@Composable
+private fun Dato(nombre: String, valor: String) {
+    Column {
+        Text(nombre, style = MaterialTheme.typography.labelMedium)
+        Text(valor.ifEmpty { "—" }, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+// El estado (contraseña visible o no) vive solo mientras el diálogo está abierto:
+// al cerrarlo y volver a abrirlo, la contraseña sale otra vez oculta.
+@Composable
+private fun DialogoDetalle(entrada: Entrada, alCopiar: () -> Unit, alEditar: () -> Unit, alCerrar: () -> Unit) {
+    var visible by remember(entrada) { mutableStateOf(false) }
+    var menu by remember(entrada) { mutableStateOf(false) }
+    var copiada by remember(entrada) { mutableStateOf(false) }
+    val secreto = entrada.protegidos["Password"]
+
+    AlertDialog(
+        onDismissRequest = alCerrar,
+        title = { Text(entrada.campos["Title"].orEmpty().ifEmpty { "(sin título)" }) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Dato("Usuario", entrada.campos["UserName"].orEmpty())
+                Column {
+                    Text("Contraseña", style = MaterialTheme.typography.labelMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            // shortcut: mostrarla exige un String, que no se puede borrar de la memoria.
+                            // Oculta, siempre el mismo número de puntos: no revela su longitud.
+                            if (visible && secreto != null) secreto.toString(Charsets.UTF_8) else "••••••••••",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Box {
+                            TextButton(onClick = { menu = true }, enabled = secreto != null) { Text("⋮") }
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Copiar contraseña") },
+                                    onClick = {
+                                        menu = false
+                                        copiada = true
+                                        alCopiar()
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (visible) "Ocultar contraseña" else "Mostrar contraseña") },
+                                    onClick = {
+                                        menu = false
+                                        visible = !visible
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    if (copiada) {
+                        Text(
+                            "Copiada. Se borrará del portapapeles en $SEGUNDOS_HASTA_BORRAR segundos.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                Dato("Creada", fecha(entrada.creada))
+                Dato("Modificada", fecha(entrada.modificada))
+            }
+        },
+        confirmButton = { TextButton(onClick = alCerrar) { Text("Cerrar") } },
+        dismissButton = { TextButton(onClick = alEditar) { Text("Editar") } },
+    )
 }
 
 @Composable

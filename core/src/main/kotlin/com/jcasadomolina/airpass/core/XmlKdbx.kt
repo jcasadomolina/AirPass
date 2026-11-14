@@ -2,6 +2,7 @@ package com.jcasadomolina.airpass.core
 
 import com.jcasadomolina.airpass.crypto.FlujoChaCha20
 import com.jcasadomolina.airpass.crypto.sha512
+import java.time.Instant
 import java.util.Base64
 import java.util.IdentityHashMap
 import javax.xml.parsers.DocumentBuilderFactory
@@ -15,6 +16,8 @@ import org.xml.sax.SAXException
 class Entrada internal constructor(
     val campos: Map<String, String>,
     val protegidos: Map<String, ByteArray>,
+    val creada: Instant?,
+    val modificada: Instant?,
     internal val elemento: Element,
 )
 
@@ -101,7 +104,14 @@ internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteAr
             val descifrado = protegidos[valor]
             if (descifrado != null) secretos[clave] = descifrado else campos[clave] = valor.textContent
         }
-        return Entrada(campos, secretos, elemento)
+        val fechas = elemento.hijo("Times")
+        return Entrada(
+            campos = campos,
+            protegidos = secretos,
+            creada = leerFecha(fechas?.hijo("CreationTime")?.textContent),
+            modificada = leerFecha(fechas?.hijo("LastModificationTime")?.textContent),
+            elemento = elemento,
+        )
     }
 
     fun grupo(elemento: Element): Grupo = Grupo(

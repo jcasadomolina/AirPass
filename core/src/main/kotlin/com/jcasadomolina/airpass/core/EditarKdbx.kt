@@ -2,12 +2,26 @@ package com.jcasadomolina.airpass.core
 
 import com.jcasadomolina.airpass.crypto.bytesAleatorios
 import com.jcasadomolina.airpass.crypto.contrasenaAleatoria
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.time.Instant
 import java.util.Base64
 import org.w3c.dom.Element
 
 // KDBX 4 guarda las fechas como segundos desde el año 1, en un entero de 64 bits en Base64.
 private const val SEGUNDOS_DEL_ANO_1_A_1970 = 62_135_596_800L
+
+// Las fechas vienen del fichero: una que no se entiende se muestra como desconocida.
+// KDBX 3 las guardaba como texto ISO 8601; se aceptan también.
+internal fun leerFecha(texto: String?): Instant? {
+    if (texto.isNullOrBlank()) return null
+    val bytes = runCatching { Base64.getDecoder().decode(texto) }.getOrNull()
+    if (bytes != null && bytes.size == 8) {
+        val segundos = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).long
+        return runCatching { Instant.ofEpochSecond(segundos - SEGUNDOS_DEL_ANO_1_A_1970) }.getOrNull()
+    }
+    return runCatching { Instant.parse(texto) }.getOrNull()
+}
 
 private fun ahora(): String =
     Base64.getEncoder().encodeToString(enteroLe(Instant.now().epochSecond + SEGUNDOS_DEL_ANO_1_A_1970))
