@@ -6,6 +6,12 @@ import com.jcasadomolina.airpass.crypto.bytesAleatorios
 import com.jcasadomolina.airpass.crypto.hmacSha256
 import com.jcasadomolina.airpass.crypto.sha256
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import java.util.Base64
 import java.util.zip.GZIPOutputStream
 import javax.xml.transform.OutputKeys
@@ -18,7 +24,7 @@ import javax.xml.transform.stream.StreamResult
 private fun contenidoEnClaro(base: BaseDeDatos): ByteArray {
     val claveInterna = bytesAleatorios(64)
     val flujo = flujoInterno(claveInterna)
-    for (elemento in base.documento.elementosProtegidos()) {
+    for (elemento in base.documento.documentElement.protegidosDentro()) {
         val secreto = checkNotNull(base.protegidos[elemento]) { "Hay un valor protegido sin descifrar" }
         elemento.textContent = Base64.getEncoder().encodeToString(flujo.aplicar(secreto))
     }
@@ -45,7 +51,14 @@ private fun contenidoEnClaro(base: BaseDeDatos): ByteArray {
 // Escribe la base de datos como un fichero KDBX completo. Conserva el cifrado, la KDF y
 // todo el contenido del original, y renueva todo lo aleatorio: semilla maestra, vector de
 // inicialización, sal de la KDF y clave interna. Así ninguna clave se usa en dos guardados.
-fun guardarKdbx(base: BaseDeDatos, contrasena: CharArray): ByteArray {
+// Con `nuevaContrasena` cambia la contraseña maestra; sin ella, se mantiene la actual.
+fun guardarKdbx(base: BaseDeDatos, nuevaContrasena: CharArray? = null): ByteArray {
+    check(base.abierta) { "La base de datos está bloqueada: sus secretos ya se han borrado" }
+    if (nuevaContrasena != null) {
+        val nueva = claveCompuesta(nuevaContrasena)
+        nueva.copyInto(base.claveCompuesta)
+        nueva.fill(0)
+    }
     val original = base.cabecera
 
     val parametros = LinkedHashMap(leerDiccionarioVariante(original.parametrosKdf))
@@ -60,9 +73,7 @@ fun guardarKdbx(base: BaseDeDatos, contrasena: CharArray): ByteArray {
         semillaMaestra, iv, parametrosKdf, original.datosPublicos,
     )
 
-    val compuesta = claveCompuesta(contrasena)
-    val transformada = transformarClave(compuesta, parametrosKdf)
-    compuesta.fill(0)
+    val transformada = transformarClave(base.claveCompuesta, parametrosKdf)
     val claves = clavesFinales(semillaMaestra, transformada)
     transformada.fill(0)
 
@@ -92,5 +103,27 @@ fun guardarKdbx(base: BaseDeDatos, contrasena: CharArray): ByteArray {
     } finally {
         claves.cifrado.fill(0)
         claves.hmac.fill(0)
+    }
+}
+
+// Guarda la base de datos en `destino` sin riesgo de dejar el fichero a medias (SR-10).
+// 1. Comprueba que lo que se va a escribir se puede volver a abrir.
+// 2. Lo escribe en un fichero temporal de la misma carpeta y fuerza su volcado a disco.
+// 3. Sustituye el original en una sola operación: o queda el antiguo, o queda el nuevo.
+fun guardarEnFichero(base: BaseDeDatos, destino: Path) {
+    val datos = guardarKdbx(base)
+    abrirConCompuesta(datos, base.claveCompuesta.copyOf()).borrarSecretos()
+
+    val carpeta = destino.toAbsolutePath().parent
+    val temporal = Files.createTempFile(carpeta, destino.fileName.toString(), ".tmp")
+    try {
+        FileChannel.open(temporal, StandardOpenOption.WRITE).use { canal ->
+            val buffer = ByteBuffer.wrap(datos)
+            while (buffer.hasRemaining()) canal.write(buffer)
+            canal.force(true)
+        }
+        Files.move(temporal, destino, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    } finally {
+        Files.deleteIfExists(temporal)
     }
 }

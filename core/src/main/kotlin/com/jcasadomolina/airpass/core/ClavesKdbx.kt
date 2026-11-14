@@ -25,14 +25,19 @@ private const val MAX_MEMORIA_ARGON2 = 1_073_741_824uL // 1 GiB
 private const val MAX_ITERACIONES_ARGON2 = 100uL
 private const val MAX_PARALELISMO_ARGON2 = 64u
 
-// Clave compuesta de KDBX: SHA-256 del SHA-256 de la contraseña en UTF-8.
-// shortcut: solo contraseña, sin fichero clave; añadirlo cuando se implemente RF-01 completo.
-internal fun claveCompuesta(contrasena: CharArray): ByteArray {
-    val buffer = Charsets.UTF_8.encode(CharBuffer.wrap(contrasena))
+// Convierte a UTF-8 sin pasar por String, para que no quede una copia que no se pueda borrar.
+internal fun aUtf8(texto: CharArray): ByteArray {
+    val buffer = Charsets.UTF_8.encode(CharBuffer.wrap(texto))
     val utf8 = ByteArray(buffer.remaining())
     buffer.get(utf8)
     buffer.array().fill(0)
+    return utf8
+}
 
+// Clave compuesta de KDBX: SHA-256 del SHA-256 de la contraseña en UTF-8.
+// shortcut: solo contraseña, sin fichero clave; añadirlo cuando se implemente RF-01 completo.
+internal fun claveCompuesta(contrasena: CharArray): ByteArray {
+    val utf8 = aUtf8(contrasena)
     val resumen = sha256(utf8)
     utf8.fill(0)
     val compuesta = sha256(resumen)
@@ -85,6 +90,16 @@ internal fun clavesFinales(semillaMaestra: ByteArray, transformada: ByteArray): 
 // Deriva las claves del fichero y comprueba con ellas la cabecera.
 // Lanza ClaveIncorrectaException si la contraseña no es la del fichero.
 fun derivarClaves(datos: ByteArray, cabecera: CabeceraKdbx, contrasena: CharArray): ClavesKdbx {
+    val compuesta = claveCompuesta(contrasena)
+    try {
+        return derivarClavesConCompuesta(datos, cabecera, compuesta)
+    } finally {
+        compuesta.fill(0)
+    }
+}
+
+// Igual que derivarClaves, a partir de la clave compuesta. No la borra: es de quien llama.
+internal fun derivarClavesConCompuesta(datos: ByteArray, cabecera: CabeceraKdbx, compuesta: ByteArray): ClavesKdbx {
     val fin = cabecera.longitud
     require(datos.size >= fin + 64) { "El fichero termina antes de la verificación de la cabecera" }
     val bytesCabecera = datos.copyOf(fin)
@@ -92,10 +107,7 @@ fun derivarClaves(datos: ByteArray, cabecera: CabeceraKdbx, contrasena: CharArra
         "La cabecera del fichero está dañada"
     }
 
-    val compuesta = claveCompuesta(contrasena)
     val transformada = transformarClave(compuesta, cabecera.parametrosKdf)
-    compuesta.fill(0)
-
     val claves = clavesFinales(cabecera.semillaMaestra, transformada)
     transformada.fill(0)
 
