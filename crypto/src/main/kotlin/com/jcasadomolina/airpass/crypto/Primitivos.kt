@@ -82,3 +82,14 @@ fun aes256CbcCifrar(clave: ByteArray, iv: ByteArray, datos: ByteArray): ByteArra
     aes.init(Cipher.ENCRYPT_MODE, SecretKeySpec(clave, "AES"), IvParameterSpec(iv))
     return aes.doFinal(datos)
 }
+
+internal const val ALFABETO_CONTRASENAS =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*+-=?_.:;"
+
+// Contraseña aleatoria. Con 20 caracteres de un alfabeto de 76 son unos 125 bits.
+// nextInt(n) elige cada carácter con la misma probabilidad. Hacer byte % n no lo haría:
+// unos caracteres saldrían más que otros (sesgo de módulo).
+fun contrasenaAleatoria(longitud: Int = 20): CharArray {
+    require(longitud in 8..256) { "Longitud de contraseña no válida: $longitud" }
+    return CharArray(longitud) { ALFABETO_CONTRASENAS[generador.nextInt(ALFABETO_CONTRASENAS.length)] }
+}

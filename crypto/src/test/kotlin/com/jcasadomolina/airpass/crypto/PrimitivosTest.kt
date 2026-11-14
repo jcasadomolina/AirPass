@@ -106,6 +106,16 @@ class PrimitivosTest {
     }
 
     @Test
+    fun contrasenaAleatoriaUsaElAlfabetoYNoSeRepite() {
+        val una = contrasenaAleatoria()
+
+        assertEquals(20, una.size)
+        assertTrue(una.all { it in ALFABETO_CONTRASENAS })
+        assertFalse(una.contentEquals(contrasenaAleatoria()))
+        assertFailsWith<IllegalArgumentException> { contrasenaAleatoria(4) }
+    }
+
+    @Test
     fun igualesComparaElContenido() {
         assertTrue(iguales(byteArrayOf(1, 2), byteArrayOf(1, 2)))
         assertFalse(iguales(byteArrayOf(1, 2), byteArrayOf(1, 3)))
