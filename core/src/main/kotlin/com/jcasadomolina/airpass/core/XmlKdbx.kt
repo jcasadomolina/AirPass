@@ -2,6 +2,7 @@ package com.jcasadomolina.airpass.core
 
 import com.jcasadomolina.airpass.crypto.FlujoChaCha20
 import com.jcasadomolina.airpass.crypto.sha512
+import java.time.Instant
 import java.util.Base64
 import java.util.IdentityHashMap
 import javax.xml.parsers.DocumentBuilderFactory
@@ -11,23 +12,50 @@ import org.xml.sax.SAXException
 
 // `campos` son los valores normales (título, usuario, URL...). `protegidos` son los
 // secretos, ya descifrados y en UTF-8: se guardan como bytes para poder borrarlos.
-class Entrada(val campos: Map<String, String>, val protegidos: Map<String, ByteArray>)
+// `elemento` es su sitio en el documento, que es lo que se modifica al editar.
+class Entrada internal constructor(
+    val campos: Map<String, String>,
+    val protegidos: Map<String, ByteArray>,
+    val creada: Instant?,
+    val modificada: Instant?,
+    internal val elemento: Element,
+)
 
-class Grupo(val nombre: String, val grupos: List<Grupo>, val entradas: List<Entrada>)
+class Grupo internal constructor(
+    val nombre: String,
+    val grupos: List<Grupo>,
+    val entradas: List<Entrada>,
+    internal val elemento: Element,
+)
 
 // Una base de datos abierta. `raiz` es lo que AirPass entiende y muestra. El resto es
 // todo lo leído del fichero, que se conserva para volver a escribirlo sin perder nada.
 class BaseDeDatos internal constructor(
-    val raiz: Grupo,
     internal val cabecera: CabeceraKdbx,
     internal val adjuntos: List<ByteArray>,
     internal val documento: Document,
     // Todos los valores protegidos del documento, descifrados, incluidos los del historial.
     internal val protegidos: IdentityHashMap<Element, ByteArray>,
+    // Permite guardar sin volver a pedir la contraseña. De ella no se puede obtener la contraseña.
+    internal val claveCompuesta: ByteArray,
 ) {
+    var raiz: Grupo = construirArbol(documento, protegidos)
+        private set
+
+    // Pasa a false al borrar los secretos. Una base bloqueada no se puede guardar.
+    var abierta: Boolean = true
+        private set
+
+    // Vuelve a leer el árbol del documento. Se llama después de cada cambio.
+    internal fun refrescar() {
+        raiz = construirArbol(documento, protegidos)
+    }
+
     // Rellena con ceros todos los secretos. Después la base de datos ya no se puede guardar.
     fun borrarSecretos() {
+        abierta = false
         protegidos.values.forEach { it.fill(0) }
+        claveCompuesta.fill(0)
     }
 }
 
@@ -47,24 +75,54 @@ internal fun flujoInterno(claveInterna: ByteArray): FlujoChaCha20 {
     return flujo
 }
 
-// Elementos marcados como protegidos, en el orden del documento.
-internal fun Document.elementosProtegidos(): List<Element> {
+internal fun Element.esProtegido(): Boolean = getAttribute("Protected").equals("True", ignoreCase = true)
+
+// Elementos marcados como protegidos dentro de este, en el orden del documento.
+internal fun Element.protegidosDentro(): List<Element> {
     val todos = getElementsByTagName("*")
-    val protegidos = ArrayList<Element>()
-    for (i in 0 until todos.length) {
-        val elemento = todos.item(i) as Element
-        if (elemento.getAttribute("Protected").equals("True", ignoreCase = true)) protegidos.add(elemento)
-    }
-    return protegidos
+    return (0 until todos.length).map { todos.item(it) as Element }.filter { it.esProtegido() }
 }
 
-private fun Element.hijos(nombre: String): List<Element> {
+internal fun Element.hijos(nombre: String): List<Element> {
     val encontrados = ArrayList<Element>()
     for (i in 0 until childNodes.length) {
         val nodo = childNodes.item(i)
         if (nodo is Element && nodo.tagName == nombre) encontrados.add(nodo)
     }
     return encontrados
+}
+
+internal fun Element.hijo(nombre: String): Element? = hijos(nombre).firstOrNull()
+
+internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteArray>): Grupo {
+    fun entrada(elemento: Element): Entrada {
+        val campos = HashMap<String, String>()
+        val secretos = HashMap<String, ByteArray>()
+        for (cadena in elemento.hijos("String")) {
+            val clave = cadena.hijo("Key")?.textContent ?: continue
+            val valor = cadena.hijo("Value") ?: continue
+            val descifrado = protegidos[valor]
+            if (descifrado != null) secretos[clave] = descifrado else campos[clave] = valor.textContent
+        }
+        val fechas = elemento.hijo("Times")
+        return Entrada(
+            campos = campos,
+            protegidos = secretos,
+            creada = leerFecha(fechas?.hijo("CreationTime")?.textContent),
+            modificada = leerFecha(fechas?.hijo("LastModificationTime")?.textContent),
+            elemento = elemento,
+        )
+    }
+
+    fun grupo(elemento: Element): Grupo = Grupo(
+        nombre = elemento.hijo("Name")?.textContent.orEmpty(),
+        grupos = elemento.hijos("Group").map { grupo(it) },
+        entradas = elemento.hijos("Entry").map { entrada(it) },
+        elemento = elemento,
+    )
+
+    val raiz = documento.documentElement.hijo("Root")?.hijo("Group")
+    return grupo(requireNotNull(raiz) { "El XML no contiene el grupo raíz" })
 }
 
 internal fun leerXmlKdbx(contenido: ContenidoKdbx): XmlLeido {
@@ -88,46 +146,34 @@ internal fun leerXmlKdbx(contenido: ContenidoKdbx): XmlLeido {
     // se descifran en el orden en que aparecen, incluidos los del historial.
     val flujo = flujoInterno(contenido.claveInterna)
     val descifrados = IdentityHashMap<Element, ByteArray>()
-    for (elemento in documento.elementosProtegidos()) {
+    for (elemento in documento.documentElement.protegidosDentro()) {
         descifrados[elemento] = flujo.aplicar(Base64.getDecoder().decode(elemento.textContent))
     }
 
-    fun entrada(elemento: Element): Entrada {
-        val campos = HashMap<String, String>()
-        val protegidos = HashMap<String, ByteArray>()
-        for (cadena in elemento.hijos("String")) {
-            val clave = cadena.hijos("Key").firstOrNull()?.textContent ?: continue
-            val valor = cadena.hijos("Value").firstOrNull() ?: continue
-            val descifrado = descifrados[valor]
-            if (descifrado != null) protegidos[clave] = descifrado else campos[clave] = valor.textContent
-        }
-        return Entrada(campos, protegidos)
-    }
-
-    fun grupo(elemento: Element): Grupo = Grupo(
-        nombre = elemento.hijos("Name").firstOrNull()?.textContent.orEmpty(),
-        grupos = elemento.hijos("Group").map { grupo(it) },
-        entradas = elemento.hijos("Entry").map { entrada(it) },
-    )
-
-    val raiz = documento.documentElement.hijos("Root").firstOrNull()?.hijos("Group")?.firstOrNull()
-    return XmlLeido(
-        raiz = grupo(requireNotNull(raiz) { "El XML no contiene el grupo raíz" }),
-        documento = documento,
-        protegidos = descifrados,
-    )
+    return XmlLeido(construirArbol(documento, descifrados), documento, descifrados)
 }
 
 // Abre una base de datos completa. Las claves y el XML descifrado se borran al terminar,
-// también si algo falla; solo sobreviven los valores protegidos de la base devuelta.
+// también si algo falla. Sobreviven los valores protegidos y la clave compuesta, dentro
+// de la base devuelta, hasta que se llame a borrarSecretos.
 fun abrirKdbx(datos: ByteArray, contrasena: CharArray): BaseDeDatos {
+    val compuesta = claveCompuesta(contrasena)
+    try {
+        return abrirConCompuesta(datos, compuesta)
+    } catch (e: Throwable) {
+        compuesta.fill(0)
+        throw e
+    }
+}
+
+internal fun abrirConCompuesta(datos: ByteArray, compuesta: ByteArray): BaseDeDatos {
     val cabecera = leerCabeceraKdbx(datos)
-    val claves = derivarClaves(datos, cabecera, contrasena)
+    val claves = derivarClavesConCompuesta(datos, cabecera, compuesta)
     try {
         val contenido = descifrarKdbx(datos, cabecera, claves)
         try {
             val xml = leerXmlKdbx(contenido)
-            return BaseDeDatos(xml.raiz, cabecera, contenido.adjuntos, xml.documento, xml.protegidos)
+            return BaseDeDatos(cabecera, contenido.adjuntos, xml.documento, xml.protegidos, compuesta)
         } finally {
             contenido.claveInterna.fill(0)
             contenido.xml.fill(0)
