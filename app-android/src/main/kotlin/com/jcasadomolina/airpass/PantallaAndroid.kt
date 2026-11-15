@@ -3,6 +3,7 @@ package com.jcasadomolina.airpass
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -33,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +53,11 @@ import com.jcasadomolina.airpass.core.Entrada
 import com.jcasadomolina.airpass.core.FicheroManipuladoException
 import com.jcasadomolina.airpass.core.Grupo
 import com.jcasadomolina.airpass.core.abrirKdbx
+import com.jcasadomolina.airpass.core.anadirEntrada
+import com.jcasadomolina.airpass.core.borrarEntrada
+import com.jcasadomolina.airpass.core.generarContrasena
+import com.jcasadomolina.airpass.core.guardarVerificado
+import com.jcasadomolina.airpass.core.modificarEntrada
 import java.io.IOException
 import java.time.Instant
 import java.time.ZoneId
@@ -63,7 +70,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // En Android no hay rutas: el fichero se identifica por una Uri que da el selector del sistema.
-private class SesionAndroid(val base: BaseDeDatos, val nombre: String)
+private class SesionAndroid(val base: BaseDeDatos, val uri: Uri, val nombre: String)
 
 @Composable
 fun PantallaAndroid() {
@@ -73,6 +80,22 @@ fun PantallaAndroid() {
             val ambito = rememberCoroutineScope()
             var sesion by remember { mutableStateOf<SesionAndroid?>(null) }
             var borradoPendiente by remember { mutableStateOf<Job?>(null) }
+            var sinGuardar by remember { mutableStateOf(false) }
+            // Acción que espera a que el usuario confirme que descarta sus cambios.
+            var pendiente by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+            fun bloquear() {
+                sesion?.base?.borrarSecretos()
+                sesion = null
+                sinGuardar = false
+            }
+
+            fun intentar(accion: () -> Unit) {
+                if (sinGuardar) pendiente = accion else accion()
+            }
+
+            // Con una base abierta, «atrás» bloquea en lugar de cerrar la app sin avisar.
+            BackHandler(enabled = sesion != null) { intentar { bloquear() } }
 
             // La cuenta atrás vive aquí y no en la lista: bloquear no la cancela, y así lo
             // copiado se borra igual aunque la base de datos ya esté cerrada.
@@ -92,13 +115,25 @@ fun PantallaAndroid() {
                 } else {
                     PantallaEntradas(
                         sesion = abierta,
+                        sinGuardar = sinGuardar,
+                        alCambiar = { sinGuardar = true },
+                        alGuardar = { sinGuardar = false },
                         alCopiar = { copiar(it) },
-                        alBloquear = {
-                            abierta.base.borrarSecretos()
-                            sesion = null
-                        },
+                        alBloquear = { intentar { bloquear() } },
                     )
                 }
+            }
+
+            pendiente?.let { accion ->
+                AlertDialog(
+                    onDismissRequest = { pendiente = null },
+                    title = { Text("Hay cambios sin guardar") },
+                    text = { Text("Si continúas, los cambios hechos desde el último guardado se perderán.") },
+                    confirmButton = {
+                        TextButton(onClick = { pendiente = null; accion() }) { Text("Descartar cambios") }
+                    },
+                    dismissButton = { TextButton(onClick = { pendiente = null }) { Text("Cancelar") } },
+                )
             }
         }
     }
@@ -146,7 +181,7 @@ private fun PantallaAbrir(alAbrir: (SesionAndroid) -> Unit) {
                         ?: throw IOException("No se puede leer el fichero")
                     abrirKdbx(datos, caracteres)
                 }
-                alAbrir(SesionAndroid(base, nombre ?: "Base de datos"))
+                alAbrir(SesionAndroid(base, elegido, nombre ?: "Base de datos"))
             } catch (e: ClaveIncorrectaException) {
                 error = "La contraseña no es correcta o el fichero ha sido manipulado."
             } catch (e: FicheroManipuladoException) {
@@ -202,28 +237,80 @@ private fun entradasConGrupo(grupo: Grupo, ruta: String = grupo.nombre): List<Pa
     grupo.entradas.map { ruta to it } +
         grupo.grupos.flatMap { entradasConGrupo(it, "$ruta / ${it.nombre}") }
 
+// Qué está editando el diálogo: una entrada existente, o ninguna si se está creando una.
+private class Edicion(val entrada: Entrada?)
+
 @Composable
-private fun PantallaEntradas(sesion: SesionAndroid, alCopiar: (ByteArray) -> Unit, alBloquear: () -> Unit) {
-    val entradas = remember(sesion) { entradasConGrupo(sesion.base.raiz) }
+private fun PantallaEntradas(
+    sesion: SesionAndroid,
+    sinGuardar: Boolean,
+    alCambiar: () -> Unit,
+    alGuardar: () -> Unit,
+    alCopiar: (ByteArray) -> Unit,
+    alBloquear: () -> Unit,
+) {
+    val contexto = LocalContext.current
+    val base = sesion.base
+    // Cada cambio en la base de datos suma uno, y eso hace que la lista se vuelva a leer.
+    var version by remember { mutableIntStateOf(0) }
+    val entradas = remember(sesion, version) { entradasConGrupo(base.raiz) }
     var detalle by remember { mutableStateOf<Entrada?>(null) }
+    var edicion by remember { mutableStateOf<Edicion?>(null) }
+    var paraBorrar by remember { mutableStateOf<Entrada?>(null) }
+    var guardando by remember { mutableStateOf(false) }
+    var aviso by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val ambito = rememberCoroutineScope()
+
+    fun cambiado() {
+        version++
+        aviso = null
+        error = null
+        alCambiar()
+    }
+
+    fun guardar() {
+        if (guardando) return
+        guardando = true
+        error = null
+        ambito.launch {
+            try {
+                // Derivar la clave y verificar tarda: fuera del hilo de la interfaz.
+                withContext(Dispatchers.IO) {
+                    escribirEnUri(contexto.contentResolver, sesion.uri, guardarVerificado(base))
+                }
+                alGuardar()
+                aviso = "Cambios guardados."
+            } catch (e: Exception) {
+                error = "No se han podido guardar los cambios. ${e.message.orEmpty()}"
+            } finally {
+                guardando = false
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(sesion.nombre, style = MaterialTheme.typography.titleMedium)
-                Text("${entradas.size} entradas", style = MaterialTheme.typography.bodySmall)
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(sesion.nombre, style = MaterialTheme.typography.titleMedium)
+            Text(
+                "${entradas.size} entradas" + if (sinGuardar) " · cambios sin guardar" else "",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            aviso?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Mientras se guarda no se edita: el documento se está leyendo en otro hilo.
+                OutlinedButton(onClick = { edicion = Edicion(null) }, enabled = !guardando) { Text("Añadir") }
+                Button(onClick = { guardar() }, enabled = sinGuardar && !guardando) { Text("Guardar") }
+                OutlinedButton(onClick = alBloquear, enabled = !guardando) { Text("Bloquear") }
+                if (guardando) CircularProgressIndicator()
             }
-            Button(onClick = alBloquear) { Text("Bloquear") }
         }
         HorizontalDivider()
         LazyColumn {
             items(entradas) { (grupo, entrada) ->
                 ListItem(
-                    modifier = Modifier.clickable { detalle = entrada },
+                    modifier = Modifier.clickable(enabled = !guardando) { detalle = entrada },
                     overlineContent = { Text(grupo) },
                     headlineContent = { Text(entrada.campos["Title"].orEmpty().ifEmpty { "(sin título)" }) },
                     supportingContent = { Text(entrada.campos["UserName"].orEmpty()) },
@@ -237,9 +324,113 @@ private fun PantallaEntradas(sesion: SesionAndroid, alCopiar: (ByteArray) -> Uni
         DialogoDetalle(
             entrada = entrada,
             alCopiar = { entrada.protegidos["Password"]?.let(alCopiar) },
+            alEditar = {
+                detalle = null
+                edicion = Edicion(entrada)
+            },
+            alBorrar = {
+                detalle = null
+                paraBorrar = entrada
+            },
             alCerrar = { detalle = null },
         )
     }
+
+    edicion?.let { actual ->
+        DialogoEntrada(
+            entrada = actual.entrada,
+            alAceptar = { titulo, usuario, contrasena ->
+                val existente = actual.entrada
+                if (existente == null) {
+                    base.anadirEntrada(base.raiz, titulo, usuario, contrasena)
+                } else {
+                    base.modificarEntrada(existente, titulo, usuario, contrasena)
+                }
+                contrasena.fill('\u0000')
+                edicion = null
+                cambiado()
+            },
+            alCancelar = { edicion = null },
+        )
+    }
+
+    paraBorrar?.let { entrada ->
+        AlertDialog(
+            onDismissRequest = { paraBorrar = null },
+            title = { Text("Borrar la entrada") },
+            text = {
+                Text(
+                    "«${entrada.campos["Title"].orEmpty()}» se moverá a la papelera, o se eliminará si la " +
+                        "base de datos no tiene papelera. El cambio no llega al fichero hasta que guardes.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { base.borrarEntrada(entrada); paraBorrar = null; cambiado() }) { Text("Borrar") }
+            },
+            dismissButton = { TextButton(onClick = { paraBorrar = null }) { Text("Cancelar") } },
+        )
+    }
+}
+
+@Composable
+private fun DialogoEntrada(
+    entrada: Entrada?,
+    alAceptar: (titulo: String, usuario: String, contrasena: CharArray) -> Unit,
+    alCancelar: () -> Unit,
+) {
+    var titulo by remember { mutableStateOf(entrada?.campos?.get("Title").orEmpty()) }
+    var usuario by remember { mutableStateOf(entrada?.campos?.get("UserName").orEmpty()) }
+    // shortcut: mismo límite que la contraseña maestra, el campo de Compose usa un String.
+    // La contraseña actual no se carga en el campo, para no mostrarla ni copiarla sin necesidad.
+    var contrasena by remember { mutableStateOf("") }
+    var faltaContrasena by remember { mutableStateOf(false) }
+
+    fun aceptar() {
+        if (contrasena.isEmpty()) {
+            faltaContrasena = true
+            return
+        }
+        val caracteres = contrasena.toCharArray()
+        contrasena = ""
+        alAceptar(titulo, usuario, caracteres)
+    }
+
+    fun generar() {
+        val generada = generarContrasena()
+        contrasena = String(generada)
+        generada.fill('\u0000')
+        faltaContrasena = false
+    }
+
+    AlertDialog(
+        onDismissRequest = alCancelar,
+        title = { Text(if (entrada == null) "Añadir entrada" else "Editar entrada") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(titulo, { titulo = it }, label = { Text("Título") }, singleLine = true)
+                OutlinedTextField(usuario, { usuario = it }, label = { Text("Usuario") }, singleLine = true)
+                OutlinedTextField(
+                    value = contrasena,
+                    onValueChange = {
+                        contrasena = it
+                        faltaContrasena = false
+                    },
+                    label = { Text("Contraseña") },
+                    singleLine = true,
+                    isError = faltaContrasena,
+                    supportingText = {
+                        if (faltaContrasena) Text("Falta la contraseña. Escríbela o genera una aleatoria.")
+                    },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { aceptar() }),
+                )
+                OutlinedButton(onClick = { generar() }) { Text("Generar contraseña aleatoria") }
+            }
+        },
+        confirmButton = { TextButton(onClick = { aceptar() }, enabled = titulo.isNotBlank()) { Text("Aceptar") } },
+        dismissButton = { TextButton(onClick = alCancelar) { Text("Cancelar") } },
+    )
 }
 
 private val formatoFecha: DateTimeFormatter =
@@ -258,7 +449,13 @@ private fun Dato(nombre: String, valor: String) {
 
 // Igual que en el escritorio: la contraseña vuelve a salir oculta al reabrir el detalle.
 @Composable
-private fun DialogoDetalle(entrada: Entrada, alCopiar: () -> Unit, alCerrar: () -> Unit) {
+private fun DialogoDetalle(
+    entrada: Entrada,
+    alCopiar: () -> Unit,
+    alEditar: () -> Unit,
+    alBorrar: () -> Unit,
+    alCerrar: () -> Unit,
+) {
     var visible by remember(entrada) { mutableStateOf(false) }
     var menu by remember(entrada) { mutableStateOf(false) }
     var copiada by remember(entrada) { mutableStateOf(false) }
@@ -314,5 +511,11 @@ private fun DialogoDetalle(entrada: Entrada, alCopiar: () -> Unit, alCerrar: () 
             }
         },
         confirmButton = { TextButton(onClick = alCerrar) { Text("Cerrar") } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = alBorrar) { Text("Borrar") }
+                TextButton(onClick = alEditar) { Text("Editar") }
+            }
+        },
     )
 }

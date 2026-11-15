@@ -1,5 +1,6 @@
 package com.jcasadomolina.airpass
 
+import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.jcasadomolina.airpass.core.Entrada
@@ -7,13 +8,13 @@ import com.jcasadomolina.airpass.core.Grupo
 import com.jcasadomolina.airpass.core.abrirKdbx
 import com.jcasadomolina.airpass.core.anadirEntrada
 import com.jcasadomolina.airpass.core.guardarKdbx
+import com.jcasadomolina.airpass.core.guardarVerificado
+import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import org.junit.Test
 import org.junit.runner.RunWith
 
-// El núcleo se escribió y se probó en la JVM de escritorio. Android usa otra máquina virtual
-// (ART) y otro proveedor criptográfico, así que hay que comprobar que funciona en un móvil.
 @RunWith(AndroidJUnit4::class)
 class CoreEnAndroidTest {
 
@@ -43,6 +44,26 @@ class CoreEnAndroidTest {
 
             assertEquals("clave-movil", contrasenaDe(reabierta.raiz, "Desde Android"), nombre)
             assertEquals("secreto123", contrasenaDe(reabierta.raiz, "Entrada de prueba"), nombre)
+        }
+    }
+
+    // Escribe a través de una Uri, como cuando el fichero llega del selector del sistema.
+    @Test
+    fun guardaEnUnaUriYSePuedeReabrir() {
+        val contexto = InstrumentationRegistry.getInstrumentation().targetContext
+        val destino = File(contexto.cacheDir, "prueba-guardado.kdbx")
+        val original = fichero(corpus.first())
+        destino.writeBytes(original)
+        try {
+            val base = abrirKdbx(original, "airpass-test".toCharArray())
+            base.anadirEntrada(base.raiz, "Guardada en Android", "movil", "clave-uri".toCharArray())
+
+            escribirEnUri(contexto.contentResolver, Uri.fromFile(destino), guardarVerificado(base))
+
+            val reabierta = abrirKdbx(destino.readBytes(), "airpass-test".toCharArray())
+            assertEquals("clave-uri", contrasenaDe(reabierta.raiz, "Guardada en Android"))
+        } finally {
+            destino.delete()
         }
     }
 
