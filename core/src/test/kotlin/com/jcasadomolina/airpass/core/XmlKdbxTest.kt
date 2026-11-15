@@ -65,6 +65,15 @@ class XmlKdbxTest {
         assertFailsWith<IllegalArgumentException> { leerXmlKdbx(contenidoCon(xml)) }
     }
 
+    // En UTF-16 cada letra ocupa dos bytes y "<!DOCTYPE" no aparece tal cual entre ellos.
+    @Test
+    fun rechazaUnXmlConDtdEnOtraCodificacion() {
+        val xml = """<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE x [<!ENTITY e "a">]>
+            <KeePassFile><Root><Group><Name>&e;</Name></Group></Root></KeePassFile>"""
+
+        assertFailsWith<IllegalArgumentException> { rechazarDtd(xml.toByteArray(Charsets.UTF_16)) }
+    }
+
     @Test
     fun rechazaUnXmlMalFormado() {
         assertFailsWith<IllegalArgumentException> { leerXmlKdbx(contenidoCon("<KeePassFile><Root>")) }
