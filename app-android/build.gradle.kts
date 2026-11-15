@@ -12,11 +12,16 @@ kotlin {
 }
 dependencies {
     implementation(project(":shared"))
+    implementation(project(":core"))
 
     implementation(libs.androidx.activity.compose)
 
     implementation(libs.compose.uiToolingPreview)
     debugImplementation(libs.compose.uiTooling)
+
+    androidTestImplementation(libs.androidx.testRunner)
+    androidTestImplementation(libs.androidx.testExt.junit)
+    androidTestImplementation(libs.kotlin.testJunit)
 }
 
 android {
@@ -29,6 +34,13 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    // Los tests en el móvil usan el mismo corpus de ficheros que los de core.
+    sourceSets {
+        getByName("androidTest") {
+            assets.directories.add("../core/src/test/resources")
+        }
     }
     packaging {
         resources {
