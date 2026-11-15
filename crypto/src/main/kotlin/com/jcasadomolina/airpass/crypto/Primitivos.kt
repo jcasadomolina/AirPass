@@ -4,9 +4,11 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.Mac
-import javax.crypto.spec.ChaCha20ParameterSpec
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import org.bouncycastle.crypto.engines.ChaCha7539Engine
+import org.bouncycastle.crypto.params.KeyParameter
+import org.bouncycastle.crypto.params.ParametersWithIV
 
 fun sha512(datos: ByteArray): ByteArray =
     MessageDigest.getInstance("SHA-512").digest(datos)
@@ -51,16 +53,26 @@ fun aes256CbcDescifrar(clave: ByteArray, iv: ByteArray, datos: ByteArray): ByteA
 
 // Cifrado de flujo ChaCha20 (RFC 8439). Cifrar y descifrar son la misma operación.
 // Guarda la posición: cada llamada continúa el flujo donde lo dejó la anterior.
+// Usa la implementación de BouncyCastle y no la del sistema: en Android, el ChaCha20 del
+// proveedor de la plataforma no continuaba el flujo igual que en el escritorio, y daba
+// otras contraseñas. Con la misma implementación en todas partes, el resultado es el mismo.
 class FlujoChaCha20(clave: ByteArray, nonce: ByteArray, contador: Int = 0) {
-    private val cifrador = Cipher.getInstance("ChaCha20")
+    private val motor = ChaCha7539Engine()
 
     init {
         require(clave.size == 32) { "La clave de ChaCha20 debe medir 32 bytes" }
         require(nonce.size == 12) { "El nonce de ChaCha20 debe medir 12 bytes" }
-        cifrador.init(Cipher.ENCRYPT_MODE, SecretKeySpec(clave, "ChaCha20"), ChaCha20ParameterSpec(nonce, contador))
+        require(contador >= 0) { "Contador de ChaCha20 no válido: $contador" }
+        motor.init(true, ParametersWithIV(KeyParameter(clave), nonce))
+        // Cada valor del contador corresponde a un bloque de 64 bytes del flujo.
+        motor.skip(contador * 64L)
     }
 
-    fun aplicar(datos: ByteArray): ByteArray = cifrador.update(datos) ?: ByteArray(0)
+    fun aplicar(datos: ByteArray): ByteArray {
+        val salida = ByteArray(datos.size)
+        motor.processBytes(datos, 0, datos.size, salida, 0)
+        return salida
+    }
 }
 
 private val generador = SecureRandom()
