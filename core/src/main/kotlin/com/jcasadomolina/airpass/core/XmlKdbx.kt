@@ -6,6 +6,7 @@ import java.time.Instant
 import java.util.Base64
 import java.util.IdentityHashMap
 import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.parsers.ParserConfigurationException
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.xml.sax.SAXException
@@ -125,15 +126,32 @@ internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteAr
     return grupo(requireNotNull(raiz) { "El XML no contiene el grupo raíz" })
 }
 
+private val DOCTYPE = "<!DOCTYPE".toByteArray()
+
+// KeePass escribe el XML en UTF-8 y sin DTD. Un byte nulo delata otra codificación, como
+// UTF-16, en la que buscar "<!DOCTYPE" byte a byte no lo encontraría.
+internal fun rechazarDtd(xml: ByteArray) {
+    require(0.toByte() !in xml) { "El XML del fichero no está en UTF-8" }
+    val hayDtd = (0..xml.size - DOCTYPE.size).any { i -> DOCTYPE.indices.all { xml[i + it] == DOCTYPE[it] } }
+    require(!hayDtd) { "El XML del fichero contiene una declaración DTD" }
+}
+
 internal fun leerXmlKdbx(contenido: ContenidoKdbx): XmlLeido {
     // shortcut: solo ChaCha20; Salsa20 (2) lo usan los ficheros KDBX 3, que no se leen.
     require(contenido.cifradoInterno == CHACHA20_INTERNO) {
         "Cifrado interno no compatible: ${contenido.cifradoInterno}"
     }
 
-    val fabrica = DocumentBuilderFactory.newInstance()
     // Sin DTD no hay entidades externas: un XML no puede hacer leer ficheros del disco (XXE).
-    fabrica.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    // El analizador de Android no admite la opción que prohíbe los DTD, así que la comprobación
+    // se hace también a mano, antes y después de analizar, igual en todas las plataformas.
+    rechazarDtd(contenido.xml)
+    val fabrica = DocumentBuilderFactory.newInstance()
+    try {
+        fabrica.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    } catch (e: ParserConfigurationException) {
+        // Android: se confía en las otras dos comprobaciones.
+    }
     val analizador = fabrica.newDocumentBuilder()
     analizador.setErrorHandler(null)
     val documento = try {
@@ -141,6 +159,7 @@ internal fun leerXmlKdbx(contenido: ContenidoKdbx): XmlLeido {
     } catch (e: SAXException) {
         throw IllegalArgumentException("El XML del fichero no es válido", e)
     }
+    require(documento.doctype == null) { "El XML del fichero contiene una declaración DTD" }
 
     // El cifrado interno es un único flujo para todo el documento: los valores protegidos
     // se descifran en el orden en que aparecen, incluidos los del historial.
