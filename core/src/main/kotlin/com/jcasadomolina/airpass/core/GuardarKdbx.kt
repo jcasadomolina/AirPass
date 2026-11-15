@@ -106,13 +106,20 @@ fun guardarKdbx(base: BaseDeDatos, nuevaContrasena: CharArray? = null): ByteArra
     }
 }
 
+// Genera el fichero y comprueba que se puede volver a abrir, antes de escribir nada en disco.
+// Si AirPass tuviera un fallo al escribir el formato, se detecta aquí y el original no se toca.
+fun guardarVerificado(base: BaseDeDatos): ByteArray {
+    val datos = guardarKdbx(base)
+    abrirConCompuesta(datos, base.claveCompuesta.copyOf()).borrarSecretos()
+    return datos
+}
+
 // Guarda la base de datos en `destino` sin riesgo de dejar el fichero a medias (SR-10).
 // 1. Comprueba que lo que se va a escribir se puede volver a abrir.
 // 2. Lo escribe en un fichero temporal de la misma carpeta y fuerza su volcado a disco.
 // 3. Sustituye el original en una sola operación: o queda el antiguo, o queda el nuevo.
 fun guardarEnFichero(base: BaseDeDatos, destino: Path) {
-    val datos = guardarKdbx(base)
-    abrirConCompuesta(datos, base.claveCompuesta.copyOf()).borrarSecretos()
+    val datos = guardarVerificado(base)
 
     val carpeta = destino.toAbsolutePath().parent
     val temporal = Files.createTempFile(carpeta, destino.fileName.toString(), ".tmp")
