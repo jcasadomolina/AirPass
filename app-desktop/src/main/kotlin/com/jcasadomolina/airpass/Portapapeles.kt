@@ -10,9 +10,6 @@ import java.awt.datatransfer.Transferable
 import java.awt.datatransfer.UnsupportedFlavorException
 import java.io.ByteArrayInputStream
 
-// Mismo plazo que KeePass.
-const val SEGUNDOS_HASTA_BORRAR = 12
-
 // Formatos con los que una aplicación pide a Windows que no guarde lo copiado en el
 // historial del portapapeles (Win+V) ni lo sincronice con otros dispositivos.
 // Cada uno es un entero de 32 bits.
