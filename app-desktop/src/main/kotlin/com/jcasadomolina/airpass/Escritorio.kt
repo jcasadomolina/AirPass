@@ -133,7 +133,7 @@ private fun elegirFichero(): File? {
 
 @Composable
 private fun PantallaAbrir(alAbrir: (BaseDeDatos, File) -> Unit) {
-    var fichero by remember { mutableStateOf<File?>(null) }
+    var fichero by remember { mutableStateOf(UltimaBase.leer()) }
     // shortcut: el campo de texto de Compose guarda la contraseña en un String, que no se
     // puede borrar de la memoria; sustituirlo por un campo propio al endurecer SR-06.
     var contrasena by remember { mutableStateOf("") }
@@ -151,7 +151,9 @@ private fun PantallaAbrir(alAbrir: (BaseDeDatos, File) -> Unit) {
         ambito.launch {
             try {
                 // La derivación de la clave tarda a propósito: fuera del hilo de la interfaz.
-                alAbrir(withContext(Dispatchers.IO) { abrirKdbx(elegido.readBytes(), caracteres) }, elegido)
+                val base = withContext(Dispatchers.IO) { abrirKdbx(elegido.readBytes(), caracteres) }
+                UltimaBase.recordar(elegido)
+                alAbrir(base, elegido)
             } catch (e: ClaveIncorrectaException) {
                 error = "La contraseña no es correcta o el fichero ha sido manipulado."
             } catch (e: FicheroManipuladoException) {
@@ -175,9 +177,9 @@ private fun PantallaAbrir(alAbrir: (BaseDeDatos, File) -> Unit) {
         Text("AirPass", style = MaterialTheme.typography.headlineMedium)
 
         OutlinedButton(onClick = { elegirFichero()?.let { fichero = it; error = null } }) {
-            Text("Elegir base de datos…")
+            Text(if (fichero == null) "Elegir base de datos…" else "Elegir otra base de datos…")
         }
-        Text(fichero?.name ?: "Ningún fichero elegido", style = MaterialTheme.typography.bodyMedium)
+        Text(fichero?.absolutePath ?: "Ningún fichero elegido", style = MaterialTheme.typography.bodyMedium)
 
         OutlinedTextField(
             value = contrasena,
