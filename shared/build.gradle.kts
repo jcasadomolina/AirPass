@@ -29,7 +29,14 @@ kotlin {
        }
     }
     sourceSets {
+        val jvmComun by creating {
+            dependsOn(commonMain.get())
+            dependencies { implementation(project(":core")) }
+        }
+        jvmMain.get().dependsOn(jvmComun)
+        androidMain.get().dependsOn(jvmComun)
         androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
         }
