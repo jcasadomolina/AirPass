@@ -51,6 +51,38 @@ class EditarKdbxTest {
     }
 
     @Test
+    fun creaGruposAnidadosConSuColorYEntradasDentro() {
+        for (nombre in listOf(keepass, keepassxc)) {
+            val base = abrir(nombre)
+            base.anadirGrupo(base.raiz, "Trabajo", "#1E88E5")
+            base.anadirGrupo(base.raiz.grupos.single { it.nombre == "Trabajo" }, "Correo", "#E53935")
+            val correo = base.raiz.grupos.single { it.nombre == "Trabajo" }.grupos.single()
+            base.anadirEntrada(correo, "Cuenta", "ana", "clave".toCharArray())
+
+            val trabajo = reabrir(base, "grupos-$nombre").raiz.grupos.single { it.nombre == "Trabajo" }
+            assertEquals("#1E88E5", trabajo.color, nombre)
+            val reabierto = trabajo.grupos.single()
+            assertEquals("Correo", reabierto.nombre)
+            assertEquals("#E53935", reabierto.color)
+            assertEquals("Cuenta", reabierto.entradas.single().campos["Title"])
+            assertEquals(24, reabierto.uuid.length)
+            assertTrue(reabierto.uuid != trabajo.uuid)
+        }
+    }
+
+    @Test
+    fun rechazaYIgnoraLosColoresQueNoSonValidos() {
+        val base = abrir(keepass)
+        assertFailsWith<IllegalArgumentException> { base.anadirGrupo(base.raiz, "Rojo", "rojo") }
+
+        base.anadirGrupo(base.raiz, "Negro", "#000000")
+        val valor = base.raiz.grupos.single { it.nombre == "Negro" }.elemento.hijo("CustomData")!!.hijo("Item")!!.hijo("Value")!!
+        valor.textContent = "#00000000; position: fixed"
+        base.refrescar()
+        assertNull(base.raiz.grupos.single { it.nombre == "Negro" }.color)
+    }
+
+    @Test
     fun modificaUnaEntradaYConservaLaVersionAnteriorEnElHistorial() {
         for (nombre in listOf(keepass, keepassxc)) {
             val base = abrir(nombre)

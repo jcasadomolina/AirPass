@@ -6,7 +6,6 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -25,7 +22,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -235,12 +231,8 @@ private fun PantallaAbrir(alAbrir: (SesionAndroid) -> Unit) {
     }
 }
 
-private fun entradasConGrupo(grupo: Grupo, ruta: String = grupo.nombre): List<Pair<String, Entrada>> =
-    grupo.entradas.map { ruta to it } +
-        grupo.grupos.flatMap { entradasConGrupo(it, "$ruta / ${it.nombre}") }
-
-// Qué está editando el diálogo: una entrada existente, o ninguna si se está creando una.
-private class Edicion(val entrada: Entrada?)
+// Qué está editando el diálogo: una entrada existente, o una nueva dentro de `grupo`.
+private class Edicion(val entrada: Entrada?, val grupo: Grupo? = null)
 
 @Composable
 private fun PantallaEntradas(
@@ -255,7 +247,7 @@ private fun PantallaEntradas(
     val base = sesion.base
     // Cada cambio en la base de datos suma uno, y eso hace que la lista se vuelva a leer.
     var version by remember { mutableIntStateOf(0) }
-    val entradas = remember(sesion, version) { entradasConGrupo(base.raiz) }
+    val raiz = remember(sesion, version) { base.raiz }
     var detalle by remember { mutableStateOf<Entrada?>(null) }
     var edicion by remember { mutableStateOf<Edicion?>(null) }
     var paraBorrar by remember { mutableStateOf<Entrada?>(null) }
@@ -295,31 +287,28 @@ private fun PantallaEntradas(
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(sesion.nombre, style = MaterialTheme.typography.titleMedium)
             Text(
-                "${entradas.size} entradas" + if (sinGuardar) " · cambios sin guardar" else "",
+                "${raiz.totalEntradas()} entradas" + if (sinGuardar) " · cambios sin guardar" else "",
                 style = MaterialTheme.typography.bodySmall,
             )
             aviso?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 // Mientras se guarda no se edita: el documento se está leyendo en otro hilo.
-                OutlinedButton(onClick = { edicion = Edicion(null) }, enabled = !guardando) { Text("Añadir") }
                 Button(onClick = { guardar() }, enabled = sinGuardar && !guardando) { Text("Guardar") }
                 OutlinedButton(onClick = alBloquear, enabled = !guardando) { Text("Bloquear") }
                 if (guardando) CircularProgressIndicator()
             }
         }
         HorizontalDivider()
-        LazyColumn {
-            items(entradas) { (grupo, entrada) ->
-                ListItem(
-                    modifier = Modifier.clickable(enabled = !guardando) { detalle = entrada },
-                    overlineContent = { Text(grupo) },
-                    headlineContent = { Text(entrada.campos["Title"].orEmpty().ifEmpty { "(sin título)" }) },
-                    supportingContent = { Text(entrada.campos["UserName"].orEmpty()) },
-                )
-                HorizontalDivider()
-            }
-        }
+        NavegadorGrupos(
+            base = base,
+            raiz = raiz,
+            habilitado = !guardando,
+            alCambiar = { cambiado() },
+            alAbrirEntrada = { detalle = it },
+            alNuevaEntrada = { edicion = Edicion(null, it) },
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 
     detalle?.let { entrada ->
@@ -344,7 +333,7 @@ private fun PantallaEntradas(
             alAceptar = { titulo, usuario, contrasena ->
                 val existente = actual.entrada
                 if (existente == null) {
-                    base.anadirEntrada(base.raiz, titulo, usuario, contrasena)
+                    base.anadirEntrada(actual.grupo ?: base.raiz, titulo, usuario, contrasena)
                 } else {
                     base.modificarEntrada(existente, titulo, usuario, contrasena)
                 }

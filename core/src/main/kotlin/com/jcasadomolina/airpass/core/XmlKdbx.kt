@@ -23,7 +23,9 @@ class Entrada internal constructor(
 )
 
 class Grupo internal constructor(
+    val uuid: String,
     val nombre: String,
+    val color: String?,
     val grupos: List<Grupo>,
     val entradas: List<Entrada>,
     internal val elemento: Element,
@@ -95,6 +97,16 @@ internal fun Element.hijos(nombre: String): List<Element> {
 
 internal fun Element.hijo(nombre: String): Element? = hijos(nombre).firstOrNull()
 
+internal const val CLAVE_COLOR = "AirPass.Color"
+internal val FORMATO_COLOR = Regex("#[0-9A-Fa-f]{6}")
+
+/** Color que AirPass guardó en el CustomData del grupo, o null si no tiene o no es un #RRGGBB válido. */
+internal fun Element.colorDeGrupo(): String? =
+    hijo("CustomData")?.hijos("Item")
+        ?.firstOrNull { it.hijo("Key")?.textContent == CLAVE_COLOR }
+        ?.hijo("Value")?.textContent
+        ?.takeIf { FORMATO_COLOR.matches(it) }
+
 internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteArray>): Grupo {
     fun entrada(elemento: Element): Entrada {
         val campos = HashMap<String, String>()
@@ -116,7 +128,9 @@ internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteAr
     }
 
     fun grupo(elemento: Element): Grupo = Grupo(
+        uuid = elemento.hijo("UUID")?.textContent.orEmpty(),
         nombre = elemento.hijo("Name")?.textContent.orEmpty(),
+        color = elemento.colorDeGrupo(),
         grupos = elemento.hijos("Group").map { grupo(it) },
         entradas = elemento.hijos("Entry").map { entrada(it) },
         elemento = elemento,
