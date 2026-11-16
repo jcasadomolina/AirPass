@@ -62,16 +62,38 @@ private fun Element.marcarModificada() {
     (fechas.hijo("LastModificationTime") ?: fechas.anadir("LastModificationTime")).textContent = ahora()
 }
 
-fun BaseDeDatos.anadirEntrada(grupo: Grupo, titulo: String, usuario: String, contrasena: CharArray) {
-    val entrada = documento.createElement("Entry")
-    entrada.anadir("UUID", Base64.getEncoder().encodeToString(bytesAleatorios(16)))
-    entrada.anadir("IconID", "0")
-    val fechas = entrada.anadir("Times")
+/** Añade a un elemento nuevo su UUID aleatorio, el icono y el bloque de fechas, todas con la hora actual. */
+private fun Element.anadirIdentidad(icono: String) {
+    anadir("UUID", Base64.getEncoder().encodeToString(bytesAleatorios(16)))
+    anadir("IconID", icono)
+    val fechas = anadir("Times")
     for (fecha in listOf("LastModificationTime", "CreationTime", "LastAccessTime", "ExpiryTime", "LocationChanged")) {
         fechas.anadir(fecha, ahora())
     }
     fechas.anadir("Expires", "False")
     fechas.anadir("UsageCount", "0")
+}
+
+/**
+ * Crea un grupo vacío dentro de `padre`, con su nombre y su color en formato #RRGGBB. El color va
+ * en el CustomData del grupo, que KeePass y KeePassXC conservan al guardar aunque no lo muestren.
+ */
+fun BaseDeDatos.anadirGrupo(padre: Grupo, nombre: String, color: String) {
+    require(FORMATO_COLOR.matches(color)) { "Color no válido: $color" }
+    val grupo = documento.createElement("Group")
+    grupo.anadirIdentidad(icono = "48")
+    grupo.anadir("Name", nombre)
+    grupo.anadir("IsExpanded", "True")
+    val item = grupo.anadir("CustomData").anadir("Item")
+    item.anadir("Key", CLAVE_COLOR)
+    item.anadir("Value", color)
+    padre.elemento.appendChild(grupo)
+    refrescar()
+}
+
+fun BaseDeDatos.anadirEntrada(grupo: Grupo, titulo: String, usuario: String, contrasena: CharArray) {
+    val entrada = documento.createElement("Entry")
+    entrada.anadirIdentidad(icono = "0")
 
     entrada.valorDe("Title").textContent = titulo
     entrada.valorDe("UserName").textContent = usuario
