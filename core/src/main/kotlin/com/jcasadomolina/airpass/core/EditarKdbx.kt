@@ -50,6 +50,34 @@ private fun Element.valorDe(campo: String): Element {
     return cadena.anadir("Value")
 }
 
+class DatosEntrada(
+    val titulo: String,
+    val usuario: String,
+    val url: String = "",
+    val notas: String = "",
+    val etiquetas: List<String> = emptyList(),
+)
+
+/** Escribe un campo de texto; si el fichero lo marca como protegido, el valor va con los demás secretos y no en claro. */
+private fun BaseDeDatos.ponerTexto(entrada: Element, campo: String, texto: String) {
+    val valor = entrada.valorDe(campo)
+    if (valor.esProtegido()) {
+        valor.textContent = ""
+        protegidos.put(valor, texto.toByteArray(Charsets.UTF_8))?.fill(0)
+    } else {
+        valor.textContent = texto
+    }
+}
+
+/** Escribe título, usuario, URL, notas y etiquetas; las etiquetas van en <Tags> separadas por «;», como en KeePass. */
+private fun BaseDeDatos.ponerDatos(entrada: Element, datos: DatosEntrada) {
+    ponerTexto(entrada, "Title", datos.titulo)
+    ponerTexto(entrada, "UserName", datos.usuario)
+    ponerTexto(entrada, "URL", datos.url)
+    ponerTexto(entrada, "Notes", datos.notas)
+    (entrada.hijo("Tags") ?: entrada.anadir("Tags")).textContent = limpiarEtiquetas(datos.etiquetas).joinToString(";")
+}
+
 private fun BaseDeDatos.ponerContrasena(entrada: Element, contrasena: CharArray) {
     val valor = entrada.valorDe("Password")
     valor.setAttribute("Protected", "True")
@@ -91,15 +119,13 @@ fun BaseDeDatos.anadirGrupo(padre: Grupo, nombre: String, color: String) {
     refrescar()
 }
 
-fun BaseDeDatos.anadirEntrada(grupo: Grupo, titulo: String, usuario: String, contrasena: CharArray) {
+/** Crea una entrada en el grupo con sus datos y su contraseña. */
+fun BaseDeDatos.anadirEntrada(grupo: Grupo, datos: DatosEntrada, contrasena: CharArray) {
     val entrada = documento.createElement("Entry")
     entrada.anadirIdentidad(icono = "0")
 
-    entrada.valorDe("Title").textContent = titulo
-    entrada.valorDe("UserName").textContent = usuario
+    ponerDatos(entrada, datos)
     ponerContrasena(entrada, contrasena)
-    entrada.valorDe("URL")
-    entrada.valorDe("Notes")
 
     grupo.elemento.insertarEntrada(entrada)
     refrescar()
@@ -107,7 +133,7 @@ fun BaseDeDatos.anadirEntrada(grupo: Grupo, titulo: String, usuario: String, con
 
 // Antes de cambiar nada, guarda en el historial de la entrada una copia de cómo estaba,
 // como hace KeePass: una contraseña sustituida por error se puede recuperar.
-fun BaseDeDatos.modificarEntrada(entrada: Entrada, titulo: String, usuario: String, contrasena: CharArray) {
+fun BaseDeDatos.modificarEntrada(entrada: Entrada, datos: DatosEntrada, contrasena: CharArray) {
     val elemento = entrada.elemento
 
     val historial = elemento.hijo("History") ?: elemento.anadir("History")
@@ -120,8 +146,7 @@ fun BaseDeDatos.modificarEntrada(entrada: Entrada, titulo: String, usuario: Stri
     historial.appendChild(copia)
     elemento.appendChild(historial)
 
-    elemento.valorDe("Title").textContent = titulo
-    elemento.valorDe("UserName").textContent = usuario
+    ponerDatos(elemento, datos)
     ponerContrasena(elemento, contrasena)
     elemento.marcarModificada()
     refrescar()

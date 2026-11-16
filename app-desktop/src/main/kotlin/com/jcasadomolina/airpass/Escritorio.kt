@@ -1,7 +1,6 @@
 package com.jcasadomolina.airpass
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,8 +12,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -32,7 +29,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -45,17 +41,12 @@ import com.jcasadomolina.airpass.core.Grupo
 import com.jcasadomolina.airpass.core.abrirKdbx
 import com.jcasadomolina.airpass.core.anadirEntrada
 import com.jcasadomolina.airpass.core.borrarEntrada
-import com.jcasadomolina.airpass.core.generarContrasena
 import com.jcasadomolina.airpass.core.guardarEnFichero
 import com.jcasadomolina.airpass.core.modificarEntrada
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
 import java.io.IOException
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -307,12 +298,12 @@ private fun PantallaEntradas(
     edicion?.let { actual ->
         DialogoEntrada(
             entrada = actual.entrada,
-            alAceptar = { titulo, usuario, contrasena ->
+            alAceptar = { datos, contrasena ->
                 val existente = actual.entrada
                 if (existente == null) {
-                    base.anadirEntrada(actual.grupo ?: base.raiz, titulo, usuario, contrasena)
+                    base.anadirEntrada(actual.grupo ?: base.raiz, datos, contrasena)
                 } else {
-                    base.modificarEntrada(existente, titulo, usuario, contrasena)
+                    base.modificarEntrada(existente, datos, contrasena)
                 }
                 contrasena.fill('\u0000')
                 edicion = null
@@ -349,142 +340,4 @@ private fun PantallaEntradas(
             alCerrar = { detalle = null },
         )
     }
-}
-
-private val formatoFecha: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy, HH:mm", Locale.forLanguageTag("es"))
-        .withZone(ZoneId.systemDefault())
-
-private fun fecha(instante: Instant?): String = instante?.let { formatoFecha.format(it) } ?: "Desconocida"
-
-@Composable
-private fun Dato(nombre: String, valor: String) {
-    Column {
-        Text(nombre, style = MaterialTheme.typography.labelMedium)
-        Text(valor.ifEmpty { "—" }, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-// El estado (contraseña visible o no) vive solo mientras el diálogo está abierto:
-// al cerrarlo y volver a abrirlo, la contraseña sale otra vez oculta.
-@Composable
-private fun DialogoDetalle(entrada: Entrada, alCopiar: () -> Unit, alEditar: () -> Unit, alCerrar: () -> Unit) {
-    var visible by remember(entrada) { mutableStateOf(false) }
-    var menu by remember(entrada) { mutableStateOf(false) }
-    var copiada by remember(entrada) { mutableStateOf(false) }
-    val secreto = entrada.protegidos["Password"]
-
-    AlertDialog(
-        onDismissRequest = alCerrar,
-        title = { Text(entrada.campos["Title"].orEmpty().ifEmpty { "(sin título)" }) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Dato("Usuario", entrada.campos["UserName"].orEmpty())
-                Column {
-                    Text("Contraseña", style = MaterialTheme.typography.labelMedium)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            // shortcut: mostrarla exige un String, que no se puede borrar de la memoria.
-                            // Oculta, siempre el mismo número de puntos: no revela su longitud.
-                            if (visible && secreto != null) secreto.toString(Charsets.UTF_8) else "••••••••••",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Box {
-                            TextButton(onClick = { menu = true }, enabled = secreto != null) { Text("⋮") }
-                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Copiar contraseña") },
-                                    onClick = {
-                                        menu = false
-                                        copiada = true
-                                        alCopiar()
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (visible) "Ocultar contraseña" else "Mostrar contraseña") },
-                                    onClick = {
-                                        menu = false
-                                        visible = !visible
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    if (copiada) {
-                        Text(
-                            "Copiada. Se borrará del portapapeles en $SEGUNDOS_HASTA_BORRAR segundos.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                Dato("Creada", fecha(entrada.creada))
-                Dato("Modificada", fecha(entrada.modificada))
-            }
-        },
-        confirmButton = { TextButton(onClick = alCerrar) { Text("Cerrar") } },
-        dismissButton = { TextButton(onClick = alEditar) { Text("Editar") } },
-    )
-}
-
-@Composable
-private fun DialogoEntrada(
-    entrada: Entrada?,
-    alAceptar: (titulo: String, usuario: String, contrasena: CharArray) -> Unit,
-    alCancelar: () -> Unit,
-) {
-    var titulo by remember { mutableStateOf(entrada?.campos?.get("Title").orEmpty()) }
-    var usuario by remember { mutableStateOf(entrada?.campos?.get("UserName").orEmpty()) }
-    // shortcut: mismo límite que la contraseña maestra, el campo de Compose usa un String.
-    // La contraseña actual no se carga en el campo, para no mostrarla ni copiarla sin necesidad.
-    var contrasena by remember { mutableStateOf("") }
-    var faltaContrasena by remember { mutableStateOf(false) }
-
-    fun aceptar() {
-        if (contrasena.isEmpty()) {
-            faltaContrasena = true
-            return
-        }
-        val caracteres = contrasena.toCharArray()
-        contrasena = ""
-        alAceptar(titulo, usuario, caracteres)
-    }
-
-    fun generar() {
-        val generada = generarContrasena()
-        contrasena = String(generada)
-        generada.fill('\u0000')
-        faltaContrasena = false
-    }
-
-    AlertDialog(
-        onDismissRequest = alCancelar,
-        title = { Text(if (entrada == null) "Añadir entrada" else "Editar entrada") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(titulo, { titulo = it }, label = { Text("Título") }, singleLine = true)
-                OutlinedTextField(usuario, { usuario = it }, label = { Text("Usuario") }, singleLine = true)
-                OutlinedTextField(
-                    value = contrasena,
-                    onValueChange = {
-                        contrasena = it
-                        faltaContrasena = false
-                    },
-                    label = { Text("Contraseña") },
-                    singleLine = true,
-                    isError = faltaContrasena,
-                    supportingText = {
-                        if (faltaContrasena) Text("Falta la contraseña. Escríbela o genera una aleatoria.")
-                    },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { aceptar() }),
-                )
-                OutlinedButton(onClick = { generar() }) { Text("Generar contraseña aleatoria") }
-            }
-        },
-        confirmButton = { TextButton(onClick = { aceptar() }, enabled = titulo.isNotBlank()) { Text("Aceptar") } },
-        dismissButton = { TextButton(onClick = alCancelar) { Text("Cancelar") } },
-    )
 }

@@ -6,8 +6,6 @@ import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
 
-// Mismo plazo que en el escritorio y que en KeePass.
-const val SEGUNDOS_HASTA_BORRAR = 12
 
 fun copiarSecreto(contexto: Context, secreto: ByteArray) {
     // shortcut: ClipData exige un String, que no se puede borrar de la memoria.
