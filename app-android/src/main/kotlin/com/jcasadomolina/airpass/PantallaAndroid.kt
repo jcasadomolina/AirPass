@@ -147,8 +147,8 @@ private fun nombreDe(contexto: Context, uri: Uri): String? =
 @Composable
 private fun PantallaAbrir(alAbrir: (SesionAndroid) -> Unit) {
     val contexto = LocalContext.current
-    var uri by remember { mutableStateOf<Uri?>(null) }
-    var nombre by remember { mutableStateOf<String?>(null) }
+    var uri by remember { mutableStateOf(leerUltimaBase(contexto)) }
+    var nombre by remember { mutableStateOf(uri?.let { nombreDe(contexto, it) }) }
     // shortcut: el campo de texto de Compose guarda la contraseña en un String, que no se
     // puede borrar de la memoria; sustituirlo por un campo propio al endurecer SR-06.
     var contrasena by remember { mutableStateOf("") }
@@ -181,6 +181,7 @@ private fun PantallaAbrir(alAbrir: (SesionAndroid) -> Unit) {
                         ?: throw IOException("No se puede leer el fichero")
                     abrirKdbx(datos, caracteres)
                 }
+                recordarUltimaBase(contexto, elegido)
                 alAbrir(SesionAndroid(base, elegido, nombre ?: "Base de datos"))
             } catch (e: ClaveIncorrectaException) {
                 error = "La contraseña no es correcta o el fichero ha sido manipulado."
@@ -205,9 +206,10 @@ private fun PantallaAbrir(alAbrir: (SesionAndroid) -> Unit) {
         Text("AirPass", style = MaterialTheme.typography.headlineMedium)
 
         OutlinedButton(onClick = { elegir.launch(arrayOf("*/*")) }, enabled = !abriendo) {
-            Text("Elegir base de datos…")
+            Text(if (uri == null) "Elegir base de datos…" else "Elegir otra base de datos…")
         }
         Text(nombre ?: "Ningún fichero elegido", style = MaterialTheme.typography.bodyMedium)
+        uri?.let(::rutaLegible)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
 
         OutlinedTextField(
             value = contrasena,
