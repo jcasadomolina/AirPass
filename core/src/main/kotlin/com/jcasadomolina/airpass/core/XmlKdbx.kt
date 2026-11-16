@@ -17,10 +17,18 @@ import org.xml.sax.SAXException
 class Entrada internal constructor(
     val campos: Map<String, String>,
     val protegidos: Map<String, ByteArray>,
+    val etiquetas: List<String>,
     val creada: Instant?,
     val modificada: Instant?,
     internal val elemento: Element,
 )
+
+/** Valor de un campo de texto de la entrada, esté guardado en claro o protegido; vacío si no lo tiene. */
+fun Entrada.texto(campo: String): String = campos[campo] ?: protegidos[campo]?.toString(Charsets.UTF_8).orEmpty()
+
+/** Separa las etiquetas por «;» o «,», quita espacios, vacías y repetidas. */
+internal fun limpiarEtiquetas(etiquetas: List<String>): List<String> =
+    etiquetas.flatMap { it.split(';', ',') }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
 class Grupo internal constructor(
     val uuid: String,
@@ -121,6 +129,7 @@ internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteAr
         return Entrada(
             campos = campos,
             protegidos = secretos,
+            etiquetas = limpiarEtiquetas(listOfNotNull(elemento.hijo("Tags")?.textContent)),
             creada = leerFecha(fechas?.hijo("CreationTime")?.textContent),
             modificada = leerFecha(fechas?.hijo("LastModificationTime")?.textContent),
             elemento = elemento,

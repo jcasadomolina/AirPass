@@ -6,6 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.jcasadomolina.airpass.core.Entrada
 import com.jcasadomolina.airpass.core.Grupo
 import com.jcasadomolina.airpass.core.abrirKdbx
+import com.jcasadomolina.airpass.core.DatosEntrada
 import com.jcasadomolina.airpass.core.anadirEntrada
 import com.jcasadomolina.airpass.core.guardarKdbx
 import com.jcasadomolina.airpass.core.guardarVerificado
@@ -39,7 +40,7 @@ class CoreEnAndroidTest {
             val base = abrirKdbx(fichero(nombre), "airpass-test".toCharArray())
             assertEquals("secreto123", contrasenaDe(base.raiz, "Entrada de prueba"), nombre)
 
-            base.anadirEntrada(base.raiz, "Desde Android", "movil", "clave-movil".toCharArray())
+            base.anadirEntrada(base.raiz, DatosEntrada("Desde Android", "movil"), "clave-movil".toCharArray())
             val reabierta = abrirKdbx(guardarKdbx(base), "airpass-test".toCharArray())
 
             assertEquals("clave-movil", contrasenaDe(reabierta.raiz, "Desde Android"), nombre)
@@ -56,7 +57,7 @@ class CoreEnAndroidTest {
         destino.writeBytes(original)
         try {
             val base = abrirKdbx(original, "airpass-test".toCharArray())
-            base.anadirEntrada(base.raiz, "Guardada en Android", "movil", "clave-uri".toCharArray())
+            base.anadirEntrada(base.raiz, DatosEntrada("Guardada en Android", "movil"), "clave-uri".toCharArray())
 
             escribirEnUri(contexto.contentResolver, Uri.fromFile(destino), guardarVerificado(base))
 

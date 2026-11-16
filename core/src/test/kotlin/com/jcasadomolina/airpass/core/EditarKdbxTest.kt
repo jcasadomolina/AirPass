@@ -40,7 +40,7 @@ class EditarKdbxTest {
     fun anadeUnaEntrada() {
         for (nombre in listOf(keepass, keepassxc)) {
             val base = abrir(nombre)
-            base.anadirEntrada(base.raiz, "Correo", "ana@example.com", "clave-nueva".toCharArray())
+            base.anadirEntrada(base.raiz, DatosEntrada("Correo", "ana@example.com"), "clave-nueva".toCharArray())
 
             val (grupo, entrada) = assertNotNull(buscar(reabrir(base, "anadir-$nombre"), "Correo"), nombre)
             assertEquals(base.raiz.nombre, grupo)
@@ -51,13 +51,45 @@ class EditarKdbxTest {
     }
 
     @Test
+    fun guardaUrlNotasYEtiquetas() {
+        for (nombre in listOf(keepass, keepassxc)) {
+            val base = abrir(nombre)
+            val notas = "Primera línea\nSegunda con <símbolos> & \"comillas\""
+            val datos = DatosEntrada("Banco", "ana", "https://banco.example", notas, listOf(" trabajo ", "correo;personal", "", "trabajo"))
+            base.anadirEntrada(base.raiz, datos, "clave".toCharArray())
+
+            val entrada = buscar(reabrir(base, "datos-$nombre"), "Banco")!!.second
+            assertEquals("https://banco.example", entrada.texto("URL"))
+            assertEquals(notas, entrada.texto("Notes"))
+            assertEquals(listOf("trabajo", "correo", "personal"), entrada.etiquetas)
+            assertEquals("trabajo;correo;personal", entrada.elemento.hijo("Tags")!!.textContent)
+        }
+    }
+
+    @Test
+    fun unCampoProtegidoPorElFicheroSigueProtegidoAlEditarlo() {
+        val base = abrir(keepassxc)
+        base.anadirEntrada(base.raiz, DatosEntrada("Notas secretas", "ana"), "clave".toCharArray())
+        val entrada = buscar(base, "Notas secretas")!!.second
+        val valor = entrada.elemento.hijos("String").single { it.hijo("Key")!!.textContent == "Notes" }.hijo("Value")!!
+        valor.setAttribute("Protected", "True")
+        base.protegidos[valor] = ByteArray(0)
+
+        base.modificarEntrada(entrada, DatosEntrada("Notas secretas", "ana", notas = "pin 1234"), "clave".toCharArray())
+
+        val reabierta = buscar(reabrir(base, "notas-protegidas.kdbx"), "Notas secretas")!!.second
+        assertNull(reabierta.campos["Notes"])
+        assertEquals("pin 1234", reabierta.texto("Notes"))
+    }
+
+    @Test
     fun creaGruposAnidadosConSuColorYEntradasDentro() {
         for (nombre in listOf(keepass, keepassxc)) {
             val base = abrir(nombre)
             base.anadirGrupo(base.raiz, "Trabajo", "#1E88E5")
             base.anadirGrupo(base.raiz.grupos.single { it.nombre == "Trabajo" }, "Correo", "#E53935")
             val correo = base.raiz.grupos.single { it.nombre == "Trabajo" }.grupos.single()
-            base.anadirEntrada(correo, "Cuenta", "ana", "clave".toCharArray())
+            base.anadirEntrada(correo, DatosEntrada("Cuenta", "ana"), "clave".toCharArray())
 
             val trabajo = reabrir(base, "grupos-$nombre").raiz.grupos.single { it.nombre == "Trabajo" }
             assertEquals("#1E88E5", trabajo.color, nombre)
@@ -89,7 +121,7 @@ class EditarKdbxTest {
             val original = buscar(base, "Entrada de prueba")!!.second
             val versionesAntes = original.elemento.hijo("History")?.hijos("Entry")?.size ?: 0
 
-            base.modificarEntrada(original, "Entrada cambiada", "otro", "secreto456".toCharArray())
+            base.modificarEntrada(original, DatosEntrada("Entrada cambiada", "otro"), "secreto456".toCharArray())
 
             val reabierta = reabrir(base, "modificar-$nombre")
             assertNull(buscar(reabierta, "Entrada de prueba"), nombre)
@@ -115,7 +147,7 @@ class EditarKdbxTest {
             val modificada = assertNotNull(entrada.modificada, nombre)
             assertTrue(creada <= modificada, nombre)
 
-            base.modificarEntrada(entrada, "Otra", "usuario", "otra".toCharArray())
+            base.modificarEntrada(entrada, DatosEntrada("Otra", "usuario"), "otra".toCharArray())
 
             val nueva = buscar(reabrir(base, "fechas-$nombre"), "Otra")!!.second
             assertEquals(creada, nueva.creada, nombre)
@@ -167,7 +199,7 @@ class EditarKdbxTest {
             val destino = carpeta.resolve("base.kdbx")
             Files.write(destino, javaClass.getResource("/$keepass")!!.readBytes())
             val base = abrirKdbx(Files.readAllBytes(destino), contrasena)
-            base.anadirEntrada(base.raiz, "Nueva", "usuario", "clave".toCharArray())
+            base.anadirEntrada(base.raiz, DatosEntrada("Nueva", "usuario"), "clave".toCharArray())
 
             guardarEnFichero(base, destino)
 
