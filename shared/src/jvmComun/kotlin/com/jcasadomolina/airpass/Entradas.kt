@@ -11,6 +11,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,17 +55,20 @@ private fun Dato(nombre: String, valor: String) {
 /**
  * Detalle de una entrada con todos sus datos. La contraseña sale oculta, siempre con los mismos puntos
  * para no revelar su longitud, y el menú ⋮ permite copiarla o mostrarla; ese estado se pierde al cerrar
- * el diálogo. `alBorrar` es opcional porque el escritorio borra desde la lista.
+ * el diálogo. `alBorrar` es opcional porque el escritorio borra desde la lista. Si la entrada tiene
+ * historial, un botón con la fecha de la versión anterior permite volver a ella tras confirmarlo.
  */
 @Composable
 fun DialogoDetalle(
     entrada: Entrada,
     alCopiar: () -> Unit,
     alEditar: () -> Unit,
+    alRestaurar: () -> Unit,
     alCerrar: () -> Unit,
     alBorrar: (() -> Unit)? = null,
 ) {
     var visible by remember(entrada) { mutableStateOf(false) }
+    var confirmarRestaurar by remember(entrada) { mutableStateOf(false) }
     var menu by remember(entrada) { mutableStateOf(false) }
     var copiada by remember(entrada) { mutableStateOf(false) }
     val secreto = entrada.protegidos["Password"]
@@ -118,6 +122,9 @@ fun DialogoDetalle(
                 Dato("Contraseña cambiada", fecha(entrada.contrasenaCambiada))
                 Dato("Creada", fecha(entrada.creada))
                 Dato("Modificada", fecha(entrada.modificada))
+                entrada.versionAnterior?.let { anterior ->
+                    OutlinedButton(onClick = { confirmarRestaurar = true }) { Text("Volver a la versión del ${fecha(anterior)}") }
+                }
             }
         },
         confirmButton = { TextButton(onClick = alCerrar) { Text("Cerrar") } },
@@ -128,6 +135,27 @@ fun DialogoDetalle(
             }
         },
     )
+
+    if (confirmarRestaurar) {
+        AlertDialog(
+            onDismissRequest = { confirmarRestaurar = false },
+            title = { Text("Volver a la versión anterior") },
+            text = {
+                Text(
+                    "La entrada recuperará los datos y la contraseña que tenía el ${fecha(entrada.versionAnterior)}. " +
+                        "La versión actual se guarda en el historial, así que podrás deshacerlo. " +
+                        "El cambio no llega al fichero hasta que guardes.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmarRestaurar = false
+                    alRestaurar()
+                }) { Text("Volver") }
+            },
+            dismissButton = { TextButton(onClick = { confirmarRestaurar = false }) { Text("Cancelar") } },
+        )
+    }
 }
 
 /**
