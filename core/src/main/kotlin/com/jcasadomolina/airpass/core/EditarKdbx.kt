@@ -127,23 +127,54 @@ fun BaseDeDatos.anadirEntrada(grupo: Grupo, datos: DatosEntrada, contrasena: Cha
     refrescar()
 }
 
-// Antes de cambiar nada, guarda en el historial de la entrada una copia de cómo estaba,
-// como hace KeePass: una contraseña sustituida por error se puede recuperar.
-fun BaseDeDatos.modificarEntrada(entrada: Entrada, datos: DatosEntrada, contrasena: CharArray) {
-    val elemento = entrada.elemento
-
-    val historial = elemento.hijo("History") ?: elemento.anadir("History")
-    elemento.removeChild(historial)
+/** Copia profunda de un elemento en la que cada valor protegido de la copia recibe su propia copia del secreto. */
+private fun BaseDeDatos.clonar(elemento: Element): Element {
     val copia = elemento.cloneNode(true) as Element
-    // La copia tiene los mismos valores protegidos, en el mismo orden: cada uno recibe su secreto.
     for ((original, clon) in elemento.protegidosDentro().zip(copia.protegidosDentro())) {
         protegidos[clon] = checkNotNull(protegidos[original]).copyOf()
     }
-    historial.appendChild(copia)
-    elemento.appendChild(historial)
+    return copia
+}
 
+/** Guarda al final del historial de la entrada una copia de cómo está ahora, sin su propio historial. */
+private fun BaseDeDatos.guardarVersion(elemento: Element): Element {
+    val historial = elemento.hijo("History") ?: elemento.anadir("History")
+    elemento.removeChild(historial)
+    historial.appendChild(clonar(elemento))
+    elemento.appendChild(historial)
+    return historial
+}
+
+/**
+ * Cambia los datos y la contraseña de una entrada. Antes guarda en el historial cómo estaba, como hace
+ * KeePass: una contraseña sustituida por error se puede recuperar.
+ */
+fun BaseDeDatos.modificarEntrada(entrada: Entrada, datos: DatosEntrada, contrasena: CharArray) {
+    val elemento = entrada.elemento
+    guardarVersion(elemento)
     ponerDatos(elemento, datos)
     ponerContrasena(elemento, contrasena)
+    elemento.marcarModificada()
+    refrescar()
+}
+
+/**
+ * Devuelve la entrada a su versión anterior, la última del historial. Como al editar, la versión actual pasa
+ * antes al historial, así que volver atrás también se puede deshacer. Se conservan el UUID y el historial;
+ * los secretos de la versión que se sustituye se borran de la memoria.
+ */
+fun BaseDeDatos.restaurarVersionAnterior(entrada: Entrada) {
+    val elemento = entrada.elemento
+    val anterior = requireNotNull(elemento.hijo("History")?.hijos("Entry")?.lastOrNull()) { "La entrada no tiene versiones anteriores" }
+    val historial = guardarVersion(elemento)
+
+    for (hijo in elemento.hijos("*").filter { it.tagName != "UUID" && it !== historial }) {
+        for (secreto in hijo.protegidosDentro()) protegidos.remove(secreto)?.fill(0)
+        elemento.removeChild(hijo)
+    }
+    for (hijo in anterior.hijos("*").filter { it.tagName != "UUID" }) {
+        elemento.insertBefore(clonar(hijo), historial)
+    }
     elemento.marcarModificada()
     refrescar()
 }

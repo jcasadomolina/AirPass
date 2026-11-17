@@ -87,6 +87,35 @@ class EditarKdbxTest {
     }
 
     @Test
+    fun vuelveALaVersionAnteriorYSePuedeDeshacer() {
+        for (nombre in listOf(keepass, keepassxc)) {
+            val base = abrir(nombre)
+            base.anadirEntrada(base.raiz, DatosEntrada("Correo", "ana", etiquetas = listOf("personal")), "primera".toCharArray())
+            assertNull(buscar(base, "Correo")!!.second.versionAnterior)
+            assertFailsWith<IllegalArgumentException> { base.restaurarVersionAnterior(buscar(base, "Correo")!!.second) }
+
+            base.modificarEntrada(buscar(base, "Correo")!!.second, DatosEntrada("Correo nuevo", "eva", url = "https://x.example"), "segunda".toCharArray())
+            val modificada = buscar(base, "Correo nuevo")!!.second
+            assertNotNull(modificada.versionAnterior)
+            val uuid = modificada.elemento.hijo("UUID")!!.textContent
+
+            base.restaurarVersionAnterior(modificada)
+            val restaurada = buscar(reabrir(base, "restaurar-$nombre"), "Correo")!!.second
+            assertEquals("ana", restaurada.texto("UserName"))
+            assertEquals("", restaurada.texto("URL"))
+            assertEquals(listOf("personal"), restaurada.etiquetas)
+            assertEquals("primera", restaurada.contrasena())
+            assertEquals(uuid, restaurada.elemento.hijo("UUID")!!.textContent)
+            assertEquals(2, restaurada.elemento.hijo("History")!!.hijos("Entry").size)
+
+            base.restaurarVersionAnterior(buscar(base, "Correo")!!.second)
+            val deshecha = buscar(reabrir(base, "deshacer-$nombre"), "Correo nuevo")!!.second
+            assertEquals("segunda", deshecha.contrasena())
+            assertEquals("https://x.example", deshecha.texto("URL"))
+        }
+    }
+
+    @Test
     fun unCampoProtegidoPorElFicheroSigueProtegidoAlEditarlo() {
         val base = abrir(keepassxc)
         base.anadirEntrada(base.raiz, DatosEntrada("Notas secretas", "ana"), "clave".toCharArray())

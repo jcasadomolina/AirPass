@@ -22,6 +22,7 @@ class Entrada internal constructor(
     val creada: Instant?,
     val modificada: Instant?,
     val contrasenaCambiada: Instant?,
+    val versionAnterior: Instant?,
     internal val elemento: Element,
 )
 
@@ -96,11 +97,12 @@ internal fun Element.protegidosDentro(): List<Element> {
     return (0 until todos.length).map { todos.item(it) as Element }.filter { it.esProtegido() }
 }
 
+/** Hijos directos con ese nombre de etiqueta, o todos si el nombre es «*». */
 internal fun Element.hijos(nombre: String): List<Element> {
     val encontrados = ArrayList<Element>()
     for (i in 0 until childNodes.length) {
         val nodo = childNodes.item(i)
-        if (nodo is Element && nodo.tagName == nombre) encontrados.add(nodo)
+        if (nodo is Element && (nombre == "*" || nodo.tagName == nombre)) encontrados.add(nodo)
     }
     return encontrados
 }
@@ -154,6 +156,8 @@ internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteAr
             creada = leerFecha(fechas?.hijo("CreationTime")?.textContent),
             modificada = leerFecha(fechas?.hijo("LastModificationTime")?.textContent),
             contrasenaCambiada = fechaCambioContrasena(elemento, protegidos),
+            versionAnterior = elemento.hijo("History")?.hijos("Entry")?.lastOrNull()
+                ?.let { leerFecha(it.hijo("Times")?.hijo("LastModificationTime")?.textContent) },
             elemento = elemento,
         )
     }
