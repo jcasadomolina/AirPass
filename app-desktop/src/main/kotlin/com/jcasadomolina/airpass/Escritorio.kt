@@ -43,6 +43,7 @@ import com.jcasadomolina.airpass.core.anadirEntrada
 import com.jcasadomolina.airpass.core.borrarEntrada
 import com.jcasadomolina.airpass.core.guardarEnFichero
 import com.jcasadomolina.airpass.core.modificarEntrada
+import com.jcasadomolina.airpass.core.restaurarVersionAnterior
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
@@ -336,6 +337,11 @@ private fun PantallaEntradas(
             alEditar = {
                 detalle = null
                 edicion = Edicion(entrada)
+            },
+            alRestaurar = {
+                base.restaurarVersionAnterior(entrada)
+                detalle = null
+                cambiado()
             },
             alCerrar = { detalle = null },
         )

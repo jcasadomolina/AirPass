@@ -50,6 +50,7 @@ import com.jcasadomolina.airpass.core.anadirEntrada
 import com.jcasadomolina.airpass.core.borrarEntrada
 import com.jcasadomolina.airpass.core.guardarVerificado
 import com.jcasadomolina.airpass.core.modificarEntrada
+import com.jcasadomolina.airpass.core.restaurarVersionAnterior
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -314,6 +315,11 @@ private fun PantallaEntradas(
             alBorrar = {
                 detalle = null
                 paraBorrar = entrada
+            },
+            alRestaurar = {
+                base.restaurarVersionAnterior(entrada)
+                detalle = null
+                cambiado()
             },
             alCerrar = { detalle = null },
         )
