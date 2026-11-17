@@ -95,13 +95,21 @@ fun aes256CbcCifrar(clave: ByteArray, iv: ByteArray, datos: ByteArray): ByteArra
     return aes.doFinal(datos)
 }
 
-internal const val ALFABETO_CONTRASENAS =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*+-=?_.:;"
-
-// Contraseña aleatoria. Con 20 caracteres de un alfabeto de 76 son unos 125 bits.
-// nextInt(n) elige cada carácter con la misma probabilidad. Hacer byte % n no lo haría:
-// unos caracteres saldrían más que otros (sesgo de módulo).
-fun contrasenaAleatoria(longitud: Int = 20): CharArray {
-    require(longitud in 8..256) { "Longitud de contraseña no válida: $longitud" }
-    return CharArray(longitud) { ALFABETO_CONTRASENAS[generador.nextInt(ALFABETO_CONTRASENAS.length)] }
+/**
+ * Contraseña aleatoria con caracteres de los grupos dados. Si `unoDeCada`, primero se pone un carácter de
+ * cada grupo y luego se baraja todo (Fisher-Yates), para que esos caracteres no queden siempre al principio.
+ * nextInt(n) elige con la misma probabilidad; hacer byte % n favorecería unos caracteres (sesgo de módulo).
+ */
+fun contrasenaAleatoria(grupos: List<String>, longitud: Int, unoDeCada: Boolean): CharArray {
+    require(grupos.isNotEmpty() && grupos.none { it.isEmpty() }) { "No hay caracteres para generar la contraseña" }
+    require(longitud in 1..256) { "Longitud de contraseña no válida: $longitud" }
+    require(!unoDeCada || longitud >= grupos.size) { "La longitud es menor que el número de grupos" }
+    val todos = grupos.joinToString("")
+    val resultado = CharArray(longitud) { todos[generador.nextInt(todos.length)] }
+    if (unoDeCada) grupos.forEachIndexed { i, grupo -> resultado[i] = grupo[generador.nextInt(grupo.length)] }
+    for (i in resultado.lastIndex downTo 1) {
+        val j = generador.nextInt(i + 1)
+        resultado[i] = resultado[j].also { resultado[j] = resultado[i] }
+    }
+    return resultado
 }

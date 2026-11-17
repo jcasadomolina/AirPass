@@ -2,6 +2,7 @@ package com.jcasadomolina.airpass.core
 
 import com.jcasadomolina.airpass.crypto.FlujoChaCha20
 import com.jcasadomolina.airpass.crypto.sha512
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
 import java.util.IdentityHashMap
@@ -20,6 +21,7 @@ class Entrada internal constructor(
     val etiquetas: List<String>,
     val creada: Instant?,
     val modificada: Instant?,
+    val contrasenaCambiada: Instant?,
     internal val elemento: Element,
 )
 
@@ -115,6 +117,25 @@ internal fun Element.colorDeGrupo(): String? =
         ?.hijo("Value")?.textContent
         ?.takeIf { FORMATO_COLOR.matches(it) }
 
+/**
+ * Cuándo se puso la contraseña actual, deducido del historial: la fecha de la primera versión, empezando por
+ * la más reciente hacia atrás, a partir de la cual la contraseña ya no cambió. Si nunca cambió, la creación.
+ */
+private fun fechaCambioContrasena(elemento: Element, protegidos: Map<Element, ByteArray>): Instant? {
+    fun contrasena(version: Element): ByteArray? {
+        val valor = version.hijos("String").firstOrNull { it.hijo("Key")?.textContent == "Password" }?.hijo("Value")
+        return valor?.let { protegidos[it] ?: it.textContent.toByteArray(Charsets.UTF_8) }
+    }
+    fun modificada(version: Element) = leerFecha(version.hijo("Times")?.hijo("LastModificationTime")?.textContent)
+
+    val versiones = elemento.hijo("History")?.hijos("Entry").orEmpty() + elemento
+    val actual = contrasena(elemento)
+    for (i in versiones.lastIndex downTo 1) {
+        if (!MessageDigest.isEqual(contrasena(versiones[i - 1]), actual)) return modificada(versiones[i])
+    }
+    return leerFecha(elemento.hijo("Times")?.hijo("CreationTime")?.textContent)
+}
+
 internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteArray>): Grupo {
     fun entrada(elemento: Element): Entrada {
         val campos = HashMap<String, String>()
@@ -132,6 +153,7 @@ internal fun construirArbol(documento: Document, protegidos: Map<Element, ByteAr
             etiquetas = limpiarEtiquetas(listOfNotNull(elemento.hijo("Tags")?.textContent)),
             creada = leerFecha(fechas?.hijo("CreationTime")?.textContent),
             modificada = leerFecha(fechas?.hijo("LastModificationTime")?.textContent),
+            contrasenaCambiada = fechaCambioContrasena(elemento, protegidos),
             elemento = elemento,
         )
     }
