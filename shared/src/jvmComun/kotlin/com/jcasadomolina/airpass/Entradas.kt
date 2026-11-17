@@ -11,7 +11,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,7 +27,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.jcasadomolina.airpass.core.DatosEntrada
 import com.jcasadomolina.airpass.core.Entrada
-import com.jcasadomolina.airpass.core.generarContrasena
 import com.jcasadomolina.airpass.core.texto
 import java.time.Instant
 import java.time.ZoneId
@@ -117,6 +115,7 @@ fun DialogoDetalle(
                 Dato("URL", entrada.texto("URL"))
                 Dato("Notas", entrada.texto("Notes"))
                 Dato("Etiquetas", entrada.etiquetas.joinToString(", "))
+                Dato("Contraseña cambiada", fecha(entrada.contrasenaCambiada))
                 Dato("Creada", fecha(entrada.creada))
                 Dato("Modificada", fecha(entrada.modificada))
             }
@@ -133,7 +132,7 @@ fun DialogoDetalle(
 
 /**
  * Diálogo para crear (`entrada` null) o editar una entrada. La contraseña es obligatoria: si falta se
- * avisa y se ofrece generar una. La actual no se carga en el campo, para no mostrarla sin necesidad.
+ * avisa, y la llave 🔑 junto al campo abre el generador. La actual no se carga en el campo, para no mostrarla sin necesidad.
  * Las etiquetas se escriben separadas por comas. Al aceptar entrega la contraseña como CharArray, que
  * quien la recibe debe borrar.
  */
@@ -150,6 +149,7 @@ fun DialogoEntrada(
     var notas by remember { mutableStateOf(entrada?.texto("Notes").orEmpty()) }
     var etiquetas by remember { mutableStateOf(entrada?.etiquetas.orEmpty().joinToString(", ")) }
     var faltaContrasena by remember { mutableStateOf(false) }
+    var generando by remember { mutableStateOf(false) }
 
     fun aceptar() {
         if (contrasena.isEmpty()) {
@@ -159,13 +159,6 @@ fun DialogoEntrada(
         val caracteres = contrasena.toCharArray()
         contrasena = ""
         alAceptar(DatosEntrada(titulo, usuario, url, notas, listOf(etiquetas)), caracteres)
-    }
-
-    fun generar() {
-        val generada = generarContrasena()
-        contrasena = String(generada)
-        generada.fill('\u0000')
-        faltaContrasena = false
     }
 
     AlertDialog(
@@ -185,12 +178,12 @@ fun DialogoEntrada(
                     singleLine = true,
                     isError = faltaContrasena,
                     supportingText = {
-                        if (faltaContrasena) Text("Falta la contraseña. Escríbela o genera una aleatoria.")
+                        if (faltaContrasena) Text("Falta la contraseña. Escríbela o genera una con la llave.")
                     },
+                    trailingIcon = { TextButton(onClick = { generando = true }) { Text("🔑") } },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 )
-                OutlinedButton(onClick = { generar() }) { Text("Generar contraseña aleatoria") }
                 OutlinedTextField(
                     url,
                     { url = it },
@@ -211,4 +204,15 @@ fun DialogoEntrada(
         confirmButton = { TextButton(onClick = { aceptar() }, enabled = titulo.isNotBlank()) { Text("Aceptar") } },
         dismissButton = { TextButton(onClick = alCancelar) { Text("Cancelar") } },
     )
+
+    if (generando) {
+        DialogoGenerador(
+            alGuardar = {
+                contrasena = it
+                faltaContrasena = false
+                generando = false
+            },
+            alCancelar = { generando = false },
+        )
+    }
 }
