@@ -1,7 +1,6 @@
 package com.jcasadomolina.airpass.core
 
 import com.jcasadomolina.airpass.crypto.bytesAleatorios
-import com.jcasadomolina.airpass.crypto.contrasenaAleatoria
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.Instant
@@ -25,9 +24,6 @@ internal fun leerFecha(texto: String?): Instant? {
 
 private fun ahora(): String =
     Base64.getEncoder().encodeToString(enteroLe(Instant.now().epochSecond + SEGUNDOS_DEL_ANO_1_A_1970))
-
-// La interfaz no ve crypto: core le ofrece el generador.
-fun generarContrasena(): CharArray = contrasenaAleatoria()
 
 private fun Element.anadir(nombre: String, texto: String? = null): Element {
     val nuevo = ownerDocument.createElement(nombre)

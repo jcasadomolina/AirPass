@@ -106,13 +106,29 @@ class PrimitivosTest {
     }
 
     @Test
-    fun contrasenaAleatoriaUsaElAlfabetoYNoSeRepite() {
-        val una = contrasenaAleatoria()
+    fun contrasenaAleatoriaUsaSoloLosGruposYNoSeRepite() {
+        val grupos = listOf("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", "0123456789")
+        val una = contrasenaAleatoria(grupos, 20, unoDeCada = false)
 
         assertEquals(20, una.size)
-        assertTrue(una.all { it in ALFABETO_CONTRASENAS })
-        assertFalse(una.contentEquals(contrasenaAleatoria()))
-        assertFailsWith<IllegalArgumentException> { contrasenaAleatoria(4) }
+        assertTrue(una.all { c -> grupos.any { c in it } })
+        assertFalse(una.contentEquals(contrasenaAleatoria(grupos, 20, unoDeCada = false)))
+    }
+
+    @Test
+    fun contrasenaAleatoriaPoneUnoDeCadaGrupoEnCualquierPosicion() {
+        val grupos = listOf("AB", "12", "-")
+        val primeras = HashSet<Char>()
+        repeat(500) {
+            val una = contrasenaAleatoria(grupos, 3, unoDeCada = true)
+            assertTrue(grupos.all { grupo -> una.any { it in grupo } }, String(una))
+            primeras += una[0]
+        }
+        assertTrue('-' in primeras, "El barajado debe mover el carácter de cada grupo")
+
+        assertFailsWith<IllegalArgumentException> { contrasenaAleatoria(grupos, 2, unoDeCada = true) }
+        assertFailsWith<IllegalArgumentException> { contrasenaAleatoria(emptyList(), 8, unoDeCada = false) }
+        assertFailsWith<IllegalArgumentException> { contrasenaAleatoria(listOf("a", ""), 8, unoDeCada = false) }
     }
 
     @Test

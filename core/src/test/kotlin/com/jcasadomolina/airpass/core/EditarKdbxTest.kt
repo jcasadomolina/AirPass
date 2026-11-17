@@ -67,6 +67,26 @@ class EditarKdbxTest {
     }
 
     @Test
+    fun deduceDelHistorialCuandoSeCambioLaContrasena() {
+        val base = abrir(keepassxc)
+        base.anadirEntrada(base.raiz, DatosEntrada("Correo", "ana"), "primera".toCharArray())
+        val fechas = buscar(base, "Correo")!!.second.elemento.hijo("Times")!!
+        fechas.hijo("CreationTime")!!.textContent = "2020-01-01T00:00:00Z"
+        fechas.hijo("LastModificationTime")!!.textContent = "2020-01-01T00:00:00Z"
+        base.refrescar()
+        val antigua = Instant.parse("2020-01-01T00:00:00Z")
+        assertEquals(antigua, buscar(base, "Correo")!!.second.contrasenaCambiada)
+
+        base.modificarEntrada(buscar(base, "Correo")!!.second, DatosEntrada("Correo personal", "ana"), "primera".toCharArray())
+        assertEquals(antigua, buscar(base, "Correo personal")!!.second.contrasenaCambiada)
+
+        base.modificarEntrada(buscar(base, "Correo personal")!!.second, DatosEntrada("Correo personal", "ana"), "segunda".toCharArray())
+        val entrada = buscar(reabrir(base, "cambio-contrasena.kdbx"), "Correo personal")!!.second
+        assertEquals(entrada.modificada, entrada.contrasenaCambiada)
+        assertTrue(entrada.contrasenaCambiada!! > antigua)
+    }
+
+    @Test
     fun unCampoProtegidoPorElFicheroSigueProtegidoAlEditarlo() {
         val base = abrir(keepassxc)
         base.anadirEntrada(base.raiz, DatosEntrada("Notas secretas", "ana"), "clave".toCharArray())
