@@ -224,8 +224,10 @@ internal fun leerXmlKdbx(contenido: ContenidoKdbx): XmlLeido {
 // Abre una base de datos completa. Las claves y el XML descifrado se borran al terminar,
 // también si algo falla. Sobreviven los valores protegidos y la clave compuesta, dentro
 // de la base devuelta, hasta que se llame a borrarSecretos.
-fun abrirKdbx(datos: ByteArray, contrasena: CharArray): BaseDeDatos {
-    val compuesta = claveCompuesta(contrasena)
+fun abrirKdbx(datos: ByteArray, contrasena: CharArray): BaseDeDatos = abrirKdbxConClave(datos, claveCompuesta(contrasena))
+
+/** Abre una base con su clave compuesta en lugar de la contraseña. La clave pasa a la base; si algo falla, se borra. */
+fun abrirKdbxConClave(datos: ByteArray, compuesta: ByteArray): BaseDeDatos {
     try {
         return abrirConCompuesta(datos, compuesta)
     } catch (e: Throwable) {

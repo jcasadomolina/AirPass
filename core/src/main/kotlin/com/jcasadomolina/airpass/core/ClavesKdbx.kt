@@ -34,9 +34,12 @@ internal fun aUtf8(texto: CharArray): ByteArray {
     return utf8
 }
 
-// Clave compuesta de KDBX: SHA-256 del SHA-256 de la contraseña en UTF-8.
+/**
+ * Clave compuesta de KDBX: SHA-256 del SHA-256 de la contraseña en UTF-8. Abre la base igual que la contraseña,
+ * pero no permite recuperarla; es lo que la huella guarda cifrado en Android. Quien la recibe debe borrarla.
+ */
 // shortcut: solo contraseña, sin fichero clave; añadirlo cuando se implemente RF-01 completo.
-internal fun claveCompuesta(contrasena: CharArray): ByteArray {
+fun claveCompuesta(contrasena: CharArray): ByteArray {
     val utf8 = aUtf8(contrasena)
     val resumen = sha256(utf8)
     utf8.fill(0)
