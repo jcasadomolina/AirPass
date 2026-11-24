@@ -20,6 +20,17 @@ class AbrirKdbxTest {
         assertTrue(todasLasEntradas(raiz).any { it.campos["Title"] == "Entrada de prueba" })
     }
 
+    @Test
+    fun abreConLaClaveCompuestaYLaBorraSiNoEsLaBuena() {
+        val raiz = abrirKdbx(fichero, "airpass-test".toCharArray()).raiz
+        val conClave = abrirKdbxConClave(fichero, claveCompuesta("airpass-test".toCharArray())).raiz
+        assertEquals(todasLasEntradas(raiz).size, todasLasEntradas(conClave).size)
+
+        val mala = claveCompuesta("otra".toCharArray())
+        assertFailsWith<ClaveIncorrectaException> { abrirKdbxConClave(fichero, mala) }
+        assertTrue(mala.all { it == 0.toByte() })
+    }
+
     // El corpus: cada fichero combina un programa, un cifrado y una KDF distintos.
     @Test
     fun abreTodosLosFicherosDelCorpus() {
