@@ -2,6 +2,7 @@ package com.jcasadomolina.airpass
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,10 +15,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -47,12 +51,15 @@ import com.jcasadomolina.airpass.core.Entrada
 import com.jcasadomolina.airpass.core.FicheroManipuladoException
 import com.jcasadomolina.airpass.core.Grupo
 import com.jcasadomolina.airpass.core.abrirKdbx
+import com.jcasadomolina.airpass.core.abrirKdbxConClave
+import com.jcasadomolina.airpass.core.claveCompuesta
 import com.jcasadomolina.airpass.core.anadirEntrada
 import com.jcasadomolina.airpass.core.borrarEntrada
 import com.jcasadomolina.airpass.core.guardarVerificado
 import com.jcasadomolina.airpass.core.modificarEntrada
 import com.jcasadomolina.airpass.core.restaurarVersionAnterior
 import java.io.IOException
+import java.security.GeneralSecurityException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -173,6 +180,9 @@ private fun PantallaAbrir(motivo: String?, alAbrir: (SesionAndroid) -> Unit) {
     var rapido by remember { mutableStateOf<Int?>(null) }
     var abriendo by remember { mutableStateOf(false) }
     val ambito = rememberCoroutineScope()
+    val biometria = remember { biometriaDisponible(contexto) }
+    var huella by remember(uri) { mutableStateOf(uri?.let { tieneHuella(contexto, it) } == true) }
+    var activarHuella by remember { mutableStateOf(false) }
 
     // El selector de documentos del sistema: AirPass solo recibe acceso al fichero elegido,
     // sin pedir permiso para leer todo el almacenamiento.
@@ -184,23 +194,16 @@ private fun PantallaAbrir(motivo: String?, alAbrir: (SesionAndroid) -> Unit) {
         }
     }
 
-    fun abrir() {
-        val elegido = uri ?: return
-        if (abriendo) return
-        val caracteres = contrasena.toCharArray()
-        contrasena = ""
+    suspend fun leerDatos(elegido: Uri): ByteArray = withContext(Dispatchers.IO) {
+        contexto.contentResolver.openInputStream(elegido)?.use { it.readBytes() } ?: throw IOException("No se puede leer el fichero")
+    }
+
+    fun lanzar(accion: suspend () -> Unit) {
         error = null
         abriendo = true
         ambito.launch {
             try {
-                // La derivación de la clave tarda a propósito: fuera del hilo de la interfaz.
-                val base = withContext(Dispatchers.IO) {
-                    val datos = contexto.contentResolver.openInputStream(elegido)?.use { it.readBytes() }
-                        ?: throw IOException("No se puede leer el fichero")
-                    abrirKdbx(datos, caracteres)
-                }
-                recordarUltimaBase(contexto, elegido)
-                alAbrir(SesionAndroid(base, elegido, nombre ?: "Base de datos", rapido?.let { DesbloqueoRapido.desde(caracteres, it) }))
+                accion()
             } catch (e: ClaveIncorrectaException) {
                 error = "La contraseña no es correcta o el fichero ha sido manipulado."
             } catch (e: FicheroManipuladoException) {
@@ -209,9 +212,57 @@ private fun PantallaAbrir(motivo: String?, alAbrir: (SesionAndroid) -> Unit) {
                 error = "No se puede abrir el fichero. ${e.message}"
             } catch (e: IOException) {
                 error = "No se puede leer el fichero."
+            } catch (e: GeneralSecurityException) {
+                olvidarHuella(contexto)
+                huella = false
+                error = "La huella ya no es válida, por ejemplo porque se ha añadido otra al dispositivo. " +
+                    "Abre con la contraseña y vuelve a activarla."
+            } finally {
+                abriendo = false
+            }
+        }
+    }
+
+    fun abrir() {
+        val elegido = uri ?: return
+        if (abriendo) return
+        val caracteres = contrasena.toCharArray()
+        contrasena = ""
+        lanzar {
+            try {
+                // La derivación de la clave tarda a propósito: fuera del hilo de la interfaz.
+                val datos = leerDatos(elegido)
+                val base = withContext(Dispatchers.IO) { abrirKdbx(datos, caracteres) }
+                if (activarHuella && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val compuesta = claveCompuesta(caracteres)
+                    try {
+                        runCatching { guardarHuella(contexto, elegido, compuesta) }
+                    } finally {
+                        compuesta.fill(0)
+                    }
+                }
+                recordarUltimaBase(contexto, elegido)
+                alAbrir(SesionAndroid(base, elegido, nombre ?: "Base de datos", rapido?.let { DesbloqueoRapido.desde(caracteres, it) }))
             } finally {
                 caracteres.fill('\u0000')
-                abriendo = false
+            }
+        }
+    }
+
+    fun abrirConHuella() {
+        val elegido = uri ?: return
+        if (abriendo || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        lanzar {
+            val datos = leerDatos(elegido)
+            val compuesta = leerHuella(contexto) ?: return@lanzar
+            try {
+                val base = withContext(Dispatchers.IO) { abrirKdbxConClave(datos, compuesta) }
+                recordarUltimaBase(contexto, elegido)
+                alAbrir(SesionAndroid(base, elegido, nombre ?: "Base de datos", null))
+            } catch (e: ClaveIncorrectaException) {
+                olvidarHuella(contexto)
+                huella = false
+                error = "La contraseña de la base ha cambiado desde que activaste la huella. Ábrela con la contraseña."
             }
         }
     }
@@ -242,12 +293,28 @@ private fun PantallaAbrir(motivo: String?, alAbrir: (SesionAndroid) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         )
         OpcionDesbloqueoRapido(rapido) { rapido = it }
+        if (biometria && uri != null && !huella) {
+            Row(
+                modifier = Modifier.toggleable(value = activarHuella, role = Role.Checkbox) { activarHuella = it },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = activarHuella, onCheckedChange = null)
+                Text("Activar el desbloqueo con huella", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
 
         if (abriendo) {
             CircularProgressIndicator()
             Text("Derivando la clave. Puede tardar un poco.", style = MaterialTheme.typography.bodySmall)
         } else {
             Button(onClick = { abrir() }, enabled = uri != null) { Text("Abrir") }
+            if (huella) {
+                OutlinedButton(onClick = { abrirConHuella() }) { Text("Abrir con huella") }
+                TextButton(onClick = {
+                    olvidarHuella(contexto)
+                    huella = false
+                }) { Text("Desactivar la huella") }
+            }
         }
 
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
