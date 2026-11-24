@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.jcasadomolina.airpass.core.BaseDeDatos
 import com.jcasadomolina.airpass.core.ClaveIncorrectaException
+import com.jcasadomolina.airpass.core.DesbloqueoRapido
 import com.jcasadomolina.airpass.core.Entrada
 import com.jcasadomolina.airpass.core.FicheroManipuladoException
 import com.jcasadomolina.airpass.core.Grupo
@@ -54,7 +55,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private class Sesion(val base: BaseDeDatos, val fichero: File)
+private class Sesion(val base: BaseDeDatos, val fichero: File, val rapido: DesbloqueoRapido?)
 
 // `pideSalir` llega a true cuando el usuario cierra la ventana. La aplicación no sale
 // hasta que se llama a `alSalir`, para poder avisar si hay cambios sin guardar.
@@ -64,18 +65,33 @@ fun Escritorio(pideSalir: Boolean, alSalir: () -> Unit, alCancelarSalida: () -> 
         Surface(modifier = Modifier.fillMaxSize()) {
             var sesion by remember { mutableStateOf<Sesion?>(null) }
             var sinGuardar by remember { mutableStateOf(false) }
+            var bloqueada by remember { mutableStateOf(false) }
+            var motivo by remember { mutableStateOf<String?>(null) }
             // Acción que espera a que el usuario confirme que descarta sus cambios.
             var pendiente by remember { mutableStateOf<(() -> Unit)?>(null) }
 
             fun cerrarSesion() {
                 Portapapeles.borrar()
+                sesion?.rapido?.olvidar()
                 sesion?.base?.borrarSecretos()
                 sesion = null
                 sinGuardar = false
+                bloqueada = false
             }
 
             fun intentar(accion: () -> Unit) {
                 if (sinGuardar) pendiente = accion else accion()
+            }
+
+            fun bloquear() {
+                val rapido = sesion?.rapido
+                if (rapido == null) {
+                    intentar { cerrarSesion() }
+                    return
+                }
+                Portapapeles.borrar()
+                rapido.bloquear()
+                bloqueada = true
             }
 
             LaunchedEffect(pideSalir) {
@@ -84,14 +100,27 @@ fun Escritorio(pideSalir: Boolean, alSalir: () -> Unit, alCancelarSalida: () -> 
 
             val abierta = sesion
             if (abierta == null) {
-                PantallaAbrir(alAbrir = { base, fichero -> sesion = Sesion(base, fichero) })
+                PantallaAbrir(motivo = motivo, alAbrir = { base, fichero, rapido ->
+                    motivo = null
+                    sesion = Sesion(base, fichero, rapido)
+                })
+            } else if (bloqueada) {
+                PantallaDesbloqueoRapido(
+                    rapido = checkNotNull(abierta.rapido),
+                    sinGuardar = sinGuardar,
+                    alDesbloquear = { bloqueada = false },
+                    alCerrar = {
+                        motivo = it
+                        cerrarSesion()
+                    },
+                )
             } else {
                 PantallaEntradas(
                     sesion = abierta,
                     sinGuardar = sinGuardar,
                     alCambiar = { sinGuardar = true },
                     alGuardar = { sinGuardar = false },
-                    alBloquear = { intentar { cerrarSesion() } },
+                    alBloquear = { bloquear() },
                 )
             }
 
@@ -120,12 +149,13 @@ private fun elegirFichero(): File? {
 }
 
 @Composable
-private fun PantallaAbrir(alAbrir: (BaseDeDatos, File) -> Unit) {
+private fun PantallaAbrir(motivo: String?, alAbrir: (BaseDeDatos, File, DesbloqueoRapido?) -> Unit) {
     var fichero by remember { mutableStateOf(UltimaBase.leer()) }
     // shortcut: el campo de texto de Compose guarda la contraseña en un String, que no se
     // puede borrar de la memoria; sustituirlo por un campo propio al endurecer SR-06.
     var contrasena by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf(motivo) }
+    var rapido by remember { mutableStateOf<Int?>(null) }
     var abriendo by remember { mutableStateOf(false) }
     val ambito = rememberCoroutineScope()
 
@@ -141,7 +171,7 @@ private fun PantallaAbrir(alAbrir: (BaseDeDatos, File) -> Unit) {
                 // La derivación de la clave tarda a propósito: fuera del hilo de la interfaz.
                 val base = withContext(Dispatchers.IO) { abrirKdbx(elegido.readBytes(), caracteres) }
                 UltimaBase.recordar(elegido)
-                alAbrir(base, elegido)
+                alAbrir(base, elegido, rapido?.let { DesbloqueoRapido.desde(caracteres, it) })
             } catch (e: ClaveIncorrectaException) {
                 error = "La contraseña no es correcta o el fichero ha sido manipulado."
             } catch (e: FicheroManipuladoException) {
@@ -181,6 +211,7 @@ private fun PantallaAbrir(alAbrir: (BaseDeDatos, File) -> Unit) {
             keyboardActions = KeyboardActions(onDone = { abrir() }),
             modifier = Modifier.width(320.dp),
         )
+        OpcionDesbloqueoRapido(rapido) { rapido = it }
 
         if (abriendo) {
             CircularProgressIndicator()
