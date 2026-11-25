@@ -31,6 +31,18 @@ class AbrirKdbxTest {
         assertTrue(mala.all { it == 0.toByte() })
     }
 
+    @Test
+    fun compruebaLaContrasenaYCopiaLaClave() {
+        val base = abrirKdbx(fichero, "airpass-test".toCharArray())
+        assertTrue(base.comprobarContrasena("airpass-test".toCharArray()))
+        assertTrue(!base.comprobarContrasena("airpass-tes".toCharArray()))
+        val copia = base.copiaClaveCompuesta()
+        assertEquals(todasLasEntradas(base.raiz).size, todasLasEntradas(abrirKdbxConClave(fichero, copia).raiz).size)
+
+        base.borrarSecretos()
+        assertFailsWith<IllegalStateException> { base.copiaClaveCompuesta() }
+    }
+
     // El corpus: cada fichero combina un programa, un cifrado y una KDF distintos.
     @Test
     fun abreTodosLosFicherosDelCorpus() {
