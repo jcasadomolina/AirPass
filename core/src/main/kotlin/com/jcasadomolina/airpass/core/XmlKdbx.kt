@@ -65,6 +65,18 @@ class BaseDeDatos internal constructor(
         raiz = construirArbol(documento, protegidos)
     }
 
+    /** true si la contraseña es la de esta base. Compara las claves compuestas en tiempo constante y borra la calculada. */
+    fun comprobarContrasena(contrasena: CharArray): Boolean {
+        val candidata = claveCompuesta(contrasena)
+        return MessageDigest.isEqual(candidata, claveCompuesta).also { candidata.fill(0) }
+    }
+
+    /** Copia de la clave compuesta, para cifrarla con la huella sin volver a pedir la contraseña. Quien la recibe debe borrarla. */
+    fun copiaClaveCompuesta(): ByteArray {
+        check(abierta) { "La base está bloqueada" }
+        return claveCompuesta.copyOf()
+    }
+
     // Rellena con ceros todos los secretos. Después la base de datos ya no se puede guardar.
     fun borrarSecretos() {
         abierta = false

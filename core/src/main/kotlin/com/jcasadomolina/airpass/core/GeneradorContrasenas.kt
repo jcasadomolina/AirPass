@@ -48,6 +48,18 @@ fun OpcionesGenerador.bits(): Double {
     return if (posibles == 0) 0.0 else longitud * log2(posibles.toDouble())
 }
 
+/**
+ * Bits estimados de una contraseña cualquiera, por ejemplo escrita a mano: longitud × log2 del tamaño de los tipos
+ * de caracteres que usa. Es una cota superior: no detecta palabras del diccionario ni patrones como «1234».
+ */
+fun estimarBits(contrasena: CharSequence): Double {
+    if (contrasena.isEmpty()) return 0.0
+    val usados = Caracteres.entries.filter { grupo -> contrasena.any { it in grupo.juego } }
+    val otros = contrasena.any { c -> Caracteres.entries.none { c in it.juego } }
+    val posibles = usados.sumOf { it.juego.length } + if (otros) 100 else 0
+    return contrasena.length * log2(posibles.coerceAtLeast(2).toDouble())
+}
+
 /** Genera una contraseña con las opciones dadas, o con las de por defecto. Quien la recibe debe borrarla. */
 fun generarContrasena(opciones: OpcionesGenerador = OpcionesGenerador()): CharArray =
     contrasenaAleatoria(opciones.grupos(), opciones.longitud, opciones.unoDeCada)

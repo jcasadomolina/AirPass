@@ -38,6 +38,14 @@ class GeneradorContrasenasTest {
     }
 
     @Test
+    fun estimaLaFuerzaDeUnaContrasenaEscrita() {
+        assertEquals(0.0, estimarBits(""))
+        assertTrue(abs(estimarBits("123456") - 6 * 3.3219) < 0.001)
+        assertTrue(abs(estimarBits("abcDEF12") - 8 * kotlin.math.log2(62.0)) < 0.001)
+        assertTrue(estimarBits("contraseña") > estimarBits("contrasena"))
+    }
+
+    @Test
     fun explicaPorQueNoSePuedeGenerar() {
         assertNull(OpcionesGenerador().problema())
         assertNotNull(OpcionesGenerador(caracteres = emptySet()).problema())
