@@ -1,38 +1,22 @@
 package com.jcasadomolina.airpass
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import com.jcasadomolina.airpass.core.BaseDeDatos
 import com.jcasadomolina.airpass.core.ClaveIncorrectaException
 import com.jcasadomolina.airpass.core.DesbloqueoRapido
@@ -55,14 +39,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private class Sesion(val base: BaseDeDatos, val fichero: File, val rapido: DesbloqueoRapido?)
+private class Sesion(val base: BaseDeDatos, val fichero: File, var rapido: DesbloqueoRapido?)
 
 // `pideSalir` llega a true cuando el usuario cierra la ventana. La aplicación no sale
 // hasta que se llama a `alSalir`, para poder avisar si hay cambios sin guardar.
 @Composable
 fun Escritorio(pideSalir: Boolean, alSalir: () -> Unit, alCancelarSalida: () -> Unit) {
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
+    TemaAirPass {
+        Box(modifier = Modifier.fillMaxSize()) {
             var sesion by remember { mutableStateOf<Sesion?>(null) }
             var sinGuardar by remember { mutableStateOf(false) }
             var bloqueada by remember { mutableStateOf(false) }
@@ -151,27 +135,23 @@ private fun elegirFichero(): File? {
 @Composable
 private fun PantallaAbrir(motivo: String?, alAbrir: (BaseDeDatos, File, DesbloqueoRapido?) -> Unit) {
     var fichero by remember { mutableStateOf(UltimaBase.leer()) }
-    // shortcut: el campo de texto de Compose guarda la contraseña en un String, que no se
-    // puede borrar de la memoria; sustituirlo por un campo propio al endurecer SR-06.
-    var contrasena by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(motivo) }
-    var rapido by remember { mutableStateOf<Int?>(null) }
-    var abriendo by remember { mutableStateOf(false) }
+    var estado by remember { mutableStateOf(EstadoAccion.Reposo) }
     val ambito = rememberCoroutineScope()
 
-    fun abrir() {
+    fun abrir(caracteres: CharArray) {
         val elegido = fichero ?: return
-        if (abriendo) return
-        val caracteres = contrasena.toCharArray()
-        contrasena = ""
         error = null
-        abriendo = true
+        estado = EstadoAccion.Trabajando
         ambito.launch {
             try {
                 // La derivación de la clave tarda a propósito: fuera del hilo de la interfaz.
                 val base = withContext(Dispatchers.IO) { abrirKdbx(elegido.readBytes(), caracteres) }
+                val codigo = UltimaBase.caracteresRapido()?.let { DesbloqueoRapido.desde(caracteres, it) }
                 UltimaBase.recordar(elegido)
-                alAbrir(base, elegido, rapido?.let { DesbloqueoRapido.desde(caracteres, it) })
+                estado = EstadoAccion.Hecho
+                delay(650)
+                alAbrir(base, elegido, codigo)
             } catch (e: ClaveIncorrectaException) {
                 error = "La contraseña no es correcta o el fichero ha sido manipulado."
             } catch (e: FicheroManipuladoException) {
@@ -182,45 +162,19 @@ private fun PantallaAbrir(motivo: String?, alAbrir: (BaseDeDatos, File, Desbloqu
                 error = "No se puede leer el fichero."
             } finally {
                 caracteres.fill('\u0000')
-                abriendo = false
+                if (estado == EstadoAccion.Trabajando) estado = EstadoAccion.Reposo
             }
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("AirPass", style = MaterialTheme.typography.headlineMedium)
-
-        OutlinedButton(onClick = { elegirFichero()?.let { fichero = it; error = null } }) {
-            Text(if (fichero == null) "Elegir base de datos…" else "Elegir otra base de datos…")
-        }
-        Text(fichero?.absolutePath ?: "Ningún fichero elegido", style = MaterialTheme.typography.bodyMedium)
-
-        OutlinedTextField(
-            value = contrasena,
-            onValueChange = { contrasena = it },
-            label = { Text("Contraseña maestra") },
-            singleLine = true,
-            enabled = !abriendo,
-            isError = error != null,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { abrir() }),
-            modifier = Modifier.width(320.dp),
-        )
-        OpcionDesbloqueoRapido(rapido) { rapido = it }
-
-        if (abriendo) {
-            CircularProgressIndicator()
-        } else {
-            Button(onClick = { abrir() }, enabled = fichero != null) { Text("Abrir") }
-        }
-
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    }
+    PantallaApertura(
+        fichero = fichero?.name,
+        ruta = fichero?.parent,
+        estado = estado,
+        error = error,
+        alElegir = { elegirFichero()?.let { fichero = it; error = null } },
+        alAbrir = ::abrir,
+    )
 }
 
 // Qué está editando el diálogo: una entrada existente, o una nueva dentro de `grupo`.
@@ -241,11 +195,16 @@ private fun PantallaEntradas(
 
     var aviso by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var guardando by remember { mutableStateOf(false) }
+    var estadoGuardar by remember { mutableStateOf(EstadoAccion.Reposo) }
+    val guardando = estadoGuardar == EstadoAccion.Trabajando
     var borradoPendiente by remember { mutableStateOf<Job?>(null) }
     var edicion by remember { mutableStateOf<Edicion?>(null) }
     var paraBorrar by remember { mutableStateOf<Entrada?>(null) }
     var detalle by remember { mutableStateOf<Entrada?>(null) }
+    var opciones by remember { mutableStateOf(false) }
+    var rapido by remember { mutableStateOf(sesion.rapido) }
+    // La última edición mostrada, para que la pantalla siga pintándose mientras se desliza al cerrarse.
+    val mostrada = remember { mutableStateOf<Edicion?>(null) }.apply { if (edicion != null) value = edicion }.value
     val ambito = rememberCoroutineScope()
 
     fun cambiado() {
@@ -269,7 +228,7 @@ private fun PantallaEntradas(
 
     fun guardar() {
         if (guardando) return
-        guardando = true
+        estadoGuardar = EstadoAccion.Trabajando
         error = null
         ambito.launch {
             try {
@@ -277,72 +236,83 @@ private fun PantallaEntradas(
                 withContext(Dispatchers.IO) { guardarEnFichero(base, sesion.fichero.toPath()) }
                 alGuardar()
                 aviso = "Cambios guardados en ${sesion.fichero.name}."
+                estadoGuardar = EstadoAccion.Hecho
             } catch (e: Exception) {
                 error = "No se han podido guardar los cambios. El fichero no se ha modificado. ${e.message.orEmpty()}"
-            } finally {
-                guardando = false
+                estadoGuardar = EstadoAccion.Reposo
+                return@launch
             }
+            delay(1200)
+            estadoGuardar = EstadoAccion.Reposo
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "${raiz.totalEntradas()} entradas" + if (sinGuardar) " · cambios sin guardar" else "",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                aviso?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (guardando) CircularProgressIndicator()
+    Box(Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            CabeceraBase(
+                titulo = sesion.fichero.name,
+                subtitulo = "${raiz.totalEntradas()} entradas" + if (sinGuardar) " · cambios sin guardar" else "",
+                aviso = aviso,
+                error = error,
+                estadoGuardar = estadoGuardar,
                 // Mientras se guarda no se edita: el documento se está leyendo en otro hilo.
-                Button(onClick = { guardar() }, enabled = sinGuardar && !guardando) { Text("Guardar") }
-                OutlinedButton(onClick = alBloquear, enabled = !guardando) { Text("Bloquear") }
+                puedeGuardar = sinGuardar && !guardando,
+                alGuardar = { guardar() },
+                alOpciones = { opciones = true },
+                alBloquear = alBloquear,
+            )
+            NavegadorGrupos(
+                base = base,
+                raiz = raiz,
+                habilitado = !guardando,
+                alCambiar = { cambiado() },
+                alAbrirEntrada = { detalle = it },
+                alNuevaEntrada = { edicion = Edicion(null, it) },
+                modifier = Modifier.fillMaxSize(),
+                accionesEntrada = { entrada ->
+                    Row {
+                        if ("Password" in entrada.protegidos) {
+                            TextButton(onClick = { copiarContrasena(entrada) }) { Text("Copiar contraseña") }
+                        }
+                        TextButton(onClick = { edicion = Edicion(entrada) }, enabled = !guardando) { Text("Editar") }
+                        TextButton(onClick = { paraBorrar = entrada }, enabled = !guardando) { Text("Borrar") }
+                    }
+                },
+            )
+        }
+        PantallaSuperpuesta(visible = edicion != null) {
+            mostrada?.let { actual ->
+                key(actual) {
+                    PantallaEdicion(
+                        entrada = actual.entrada,
+                        alAceptar = { datos, contrasena ->
+                            val existente = actual.entrada
+                            if (existente == null) {
+                                base.anadirEntrada(actual.grupo ?: base.raiz, datos, contrasena)
+                            } else {
+                                base.modificarEntrada(existente, datos, contrasena)
+                            }
+                            contrasena.fill('\u0000')
+                            edicion = null
+                            cambiado()
+                        },
+                        alCancelar = { edicion = null },
+                    )
+                }
             }
         }
-        HorizontalDivider()
-        NavegadorGrupos(
-            base = base,
-            raiz = raiz,
-            habilitado = !guardando,
-            alCambiar = { cambiado() },
-            alAbrirEntrada = { detalle = it },
-            alNuevaEntrada = { edicion = Edicion(null, it) },
-            modifier = Modifier.fillMaxSize(),
-            accionesEntrada = { entrada ->
-                Row {
-                    if ("Password" in entrada.protegidos) {
-                        TextButton(onClick = { copiarContrasena(entrada) }) { Text("Copiar contraseña") }
-                    }
-                    TextButton(onClick = { edicion = Edicion(entrada) }, enabled = !guardando) { Text("Editar") }
-                    TextButton(onClick = { paraBorrar = entrada }, enabled = !guardando) { Text("Borrar") }
-                }
-            },
-        )
-    }
-
-    edicion?.let { actual ->
-        DialogoEntrada(
-            entrada = actual.entrada,
-            alAceptar = { datos, contrasena ->
-                val existente = actual.entrada
-                if (existente == null) {
-                    base.anadirEntrada(actual.grupo ?: base.raiz, datos, contrasena)
-                } else {
-                    base.modificarEntrada(existente, datos, contrasena)
-                }
-                contrasena.fill('\u0000')
-                edicion = null
-                cambiado()
-            },
-            alCancelar = { edicion = null },
-        )
+        PantallaSuperpuesta(visible = opciones) {
+            PantallaOpciones(
+                base = base,
+                rapido = rapido,
+                alCambiarRapido = {
+                    rapido = it
+                    sesion.rapido = it
+                    UltimaBase.recordarRapido(it?.caracteres)
+                },
+                alVolver = { opciones = false },
+            )
+        }
     }
 
     paraBorrar?.let { entrada ->

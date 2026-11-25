@@ -7,6 +7,7 @@ import android.provider.DocumentsContract
 
 private const val PREFERENCIAS = "airpass"
 private const val CLAVE = "ultimaBase"
+private const val CLAVE_RAPIDO = "caracteresRapido"
 private const val PERMISOS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 
 /**
@@ -29,6 +30,17 @@ fun leerUltimaBase(contexto: Context): Uri? {
     return uri?.takeIf { guardada ->
         contexto.contentResolver.persistedUriPermissions.any { it.uri == guardada && it.isReadPermission }
     }
+}
+
+/** Cuántos caracteres usa el desbloqueo rápido, o null si está desactivado. Es solo la preferencia: el código vive en memoria. */
+fun caracteresRapido(contexto: Context): Int? =
+    contexto.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE).getInt(CLAVE_RAPIDO, 0).takeIf { it in 1..16 }
+
+/** Guarda la preferencia del desbloqueo rápido para las próximas aperturas; null la desactiva. */
+fun recordarRapido(contexto: Context, caracteres: Int?) {
+    val editor = contexto.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE).edit()
+    if (caracteres == null) editor.remove(CLAVE_RAPIDO) else editor.putInt(CLAVE_RAPIDO, caracteres)
+    editor.apply()
 }
 
 /**
