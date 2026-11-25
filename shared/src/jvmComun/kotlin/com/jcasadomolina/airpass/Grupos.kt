@@ -1,27 +1,30 @@
 package com.jcasadomolina.airpass
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,14 +35,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jcasadomolina.airpass.core.BaseDeDatos
 import com.jcasadomolina.airpass.core.Entrada
 import com.jcasadomolina.airpass.core.Grupo
 import com.jcasadomolina.airpass.core.anadirGrupo
+import com.jcasadomolina.airpass.core.texto
 
 val COLORES_DE_GRUPO = listOf("#E53935", "#FB8C00", "#FDD835", "#43A047", "#00897B", "#1E88E5", "#5E35B1", "#757575")
 
@@ -101,52 +109,91 @@ fun NavegadorGrupos(
 
     Box(modifier) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (ruta.isNotEmpty()) TextButton(onClick = { subir() }) { Text("←") }
+            Row(
+                modifier = Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AnimatedVisibility(visible = ruta.isNotEmpty()) {
+                    IconButton(onClick = { subir() }) { Icon(Iconos.Atras, contentDescription = "Volver al grupo anterior") }
+                }
                 if (buscando) {
                     OutlinedTextField(
                         value = busqueda,
                         onValueChange = { busqueda = it },
-                        placeholder = { Text("Buscar por título en ${actual.nombre}") },
+                        placeholder = { Text("Buscar en ${actual.nombre}") },
+                        leadingIcon = { Icon(Iconos.Buscar, contentDescription = null, modifier = Modifier.size(20.dp)) },
                         singleLine = true,
+                        shape = RoundedCornerShape(50),
                         modifier = Modifier.weight(1f).focusRequester(foco),
                     )
                     LaunchedEffect(Unit) { foco.requestFocus() }
-                    TextButton(onClick = { cerrarBusqueda() }) { Text("✕") }
+                    IconButton(onClick = { cerrarBusqueda() }) { Icon(Iconos.Cerrar, contentDescription = "Cerrar la búsqueda") }
                 } else {
                     Text(
-                        grupos.joinToString(" / ") { it.nombre },
+                        grupos.joinToString("  /  ") { it.nombre },
                         style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.weight(1f).padding(start = 8.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(start = 12.dp),
                     )
-                    TextButton(onClick = { buscando = true }) { Text("🔍") }
+                    IconButton(onClick = { buscando = true }) { Icon(Iconos.Buscar, contentDescription = "Buscar por título") }
                 }
             }
-            HorizontalDivider()
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                if (buscando && busqueda.isNotBlank()) {
-                    items(actual.buscar(busqueda)) { FilaEntrada(it, habilitado, alAbrirEntrada, accionesEntrada) }
+            val resultados = if (buscando && busqueda.isNotBlank()) actual.buscar(busqueda) else null
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 100.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (resultados != null) {
+                    items(resultados) { FilaEntrada(it, habilitado, alAbrirEntrada, accionesEntrada) }
+                    if (resultados.isEmpty()) item { Vacio("Ninguna entrada de ${actual.nombre} contiene «$busqueda» en el título.") }
                 } else {
                     items(actual.grupos, key = { it.uuid }) { grupo ->
-                        ListItem(
-                            modifier = Modifier.clickable { ruta = ruta + grupo.uuid },
-                            leadingContent = { Box(Modifier.size(16.dp).background(colorDe(grupo.color), CircleShape)) },
-                            headlineContent = { Text(grupo.nombre) },
-                            supportingContent = {
+                        TarjetaPulsable(alPulsar = { ruta = ruta + grupo.uuid }, modifier = Modifier.fillMaxWidth().animateItem()) {
+                            val color = colorDe(grupo.color)
+                            Box(
+                                Modifier.size(38.dp).clip(MaterialTheme.shapes.small).background(color.copy(alpha = 0.16f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(Modifier.size(12.dp).background(color, CircleShape))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(grupo.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                                 val total = grupo.totalEntradas()
-                                Text(if (total == 1) "1 entrada" else "$total entradas")
-                            },
-                            trailingContent = { Text("›", style = MaterialTheme.typography.titleLarge) },
-                        )
-                        HorizontalDivider()
+                                Text(
+                                    if (total == 1) "1 entrada" else "$total entradas",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Icon(Iconos.Siguiente, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                     items(actual.entradas) { FilaEntrada(it, habilitado, alAbrirEntrada, accionesEntrada) }
+                    if (actual.grupos.isEmpty() && actual.entradas.isEmpty()) {
+                        item { Vacio("Este grupo está vacío. Pulsa «Añadir» para crear una entrada o un grupo.") }
+                    }
                 }
             }
         }
-        Box(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-            FloatingActionButton(onClick = { if (habilitado) menu = true }) {
-                Text("+", style = MaterialTheme.typography.headlineSmall)
+        Box(modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) {
+            Surface(
+                onClick = { if (habilitado) menu = true },
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shadowElevation = 8.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 18.dp, end = 22.dp, top = 14.dp, bottom = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Iconos.Mas, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Text("Añadir", style = MaterialTheme.typography.labelLarge)
+                }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Nueva entrada") }, onClick = { menu = false; alNuevaEntrada(actual) })
@@ -167,7 +214,19 @@ fun NavegadorGrupos(
     }
 }
 
-/** Una entrada de la lista: título y usuario, y los botones que añada la plataforma. */
+/** Mensaje centrado y discreto para una lista sin elementos. */
+@Composable
+private fun Vacio(texto: String) {
+    Text(
+        texto,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(32.dp),
+    )
+}
+
+/** Una entrada de la lista como tarjeta: inicial del título, título y usuario, y los botones que añada la plataforma. */
 @Composable
 private fun FilaEntrada(
     entrada: Entrada,
@@ -175,16 +234,29 @@ private fun FilaEntrada(
     alAbrir: (Entrada) -> Unit,
     acciones: @Composable (Entrada) -> Unit,
 ) {
-    ListItem(
-        modifier = Modifier.clickable(enabled = habilitado) { alAbrir(entrada) },
-        headlineContent = { Text(entrada.campos["Title"].orEmpty().ifEmpty { "(sin título)" }) },
-        supportingContent = { Text(entrada.campos["UserName"].orEmpty()) },
-        trailingContent = { acciones(entrada) },
-    )
-    HorizontalDivider()
+    val titulo = entrada.texto("Title").ifEmpty { "(sin título)" }
+    TarjetaPulsable(alPulsar = { alAbrir(entrada) }, habilitada = habilitado, modifier = Modifier.fillMaxWidth()) {
+        Box(
+            Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(titulo.first().uppercase(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(titulo, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                entrada.texto("UserName"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        acciones(entrada)
+    }
 }
 
-/** Diálogo para crear un grupo: pide el nombre y deja elegir un color de la paleta. */
+/** Diálogo para crear un grupo: pide el nombre y deja elegir un color de la paleta; el elegido lleva un ✓. */
 @Composable
 private fun DialogoGrupo(alAceptar: (nombre: String, color: String) -> Unit, alCancelar: () -> Unit) {
     var nombre by remember { mutableStateOf("") }
@@ -198,12 +270,12 @@ private fun DialogoGrupo(alAceptar: (nombre: String, color: String) -> Unit, alC
                 OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre") }, singleLine = true)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (opcion in COLORES_DE_GRUPO) {
-                        val borde = if (opcion == color) {
-                            Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                        } else {
-                            Modifier
+                        Box(
+                            Modifier.size(26.dp).clip(CircleShape).background(colorDe(opcion)).clickable { color = opcion },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (opcion == color) Icon(Iconos.Check, contentDescription = "Elegido", tint = Color.White, modifier = Modifier.size(16.dp))
                         }
-                        Box(Modifier.size(24.dp).background(colorDe(opcion), CircleShape).then(borde).clickable { color = opcion })
                     }
                 }
             }

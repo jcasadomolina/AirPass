@@ -5,14 +5,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,10 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.jcasadomolina.airpass.core.DatosEntrada
 import com.jcasadomolina.airpass.core.Entrada
 import com.jcasadomolina.airpass.core.texto
 import java.time.Instant
@@ -47,8 +44,8 @@ private fun fecha(instante: Instant?): String = instante?.let { formatoFecha.for
 @Composable
 private fun Dato(nombre: String, valor: String) {
     Column {
-        Text(nombre, style = MaterialTheme.typography.labelMedium)
-        Text(valor.ifEmpty { "—" }, style = MaterialTheme.typography.bodyLarge)
+        Text(nombre, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(valor.ifEmpty { "—" }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -80,16 +77,19 @@ fun DialogoDetalle(
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Dato("Usuario", entrada.texto("UserName"))
                 Column {
-                    Text("Contraseña", style = MaterialTheme.typography.labelMedium)
+                    Text("Contraseña", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             if (visible && secreto != null) secreto.toString(Charsets.UTF_8) else "••••••••••",
                             style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontFamily = FontFamily.Monospace,
                             modifier = Modifier.weight(1f),
                         )
                         Box {
-                            TextButton(onClick = { menu = true }, enabled = secreto != null) { Text("⋮") }
+                            IconButton(onClick = { menu = true }, enabled = secreto != null) {
+                                Icon(Iconos.Opciones, contentDescription = "Opciones de la contraseña")
+                            }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                 DropdownMenuItem(
                                     text = { Text("Copiar contraseña") },
@@ -154,93 +154,6 @@ fun DialogoDetalle(
                 }) { Text("Volver") }
             },
             dismissButton = { TextButton(onClick = { confirmarRestaurar = false }) { Text("Cancelar") } },
-        )
-    }
-}
-
-/**
- * Diálogo para crear (`entrada` null) o editar una entrada. La contraseña es obligatoria: si falta se
- * avisa, y la llave 🔑 junto al campo abre el generador. La actual no se carga en el campo, para no mostrarla sin necesidad.
- * Las etiquetas se escriben separadas por comas. Al aceptar entrega la contraseña como CharArray, que
- * quien la recibe debe borrar.
- */
-@Composable
-fun DialogoEntrada(
-    entrada: Entrada?,
-    alAceptar: (DatosEntrada, CharArray) -> Unit,
-    alCancelar: () -> Unit,
-) {
-    var titulo by remember { mutableStateOf(entrada?.texto("Title").orEmpty()) }
-    var usuario by remember { mutableStateOf(entrada?.texto("UserName").orEmpty()) }
-    var contrasena by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf(entrada?.texto("URL").orEmpty()) }
-    var notas by remember { mutableStateOf(entrada?.texto("Notes").orEmpty()) }
-    var etiquetas by remember { mutableStateOf(entrada?.etiquetas.orEmpty().joinToString(", ")) }
-    var faltaContrasena by remember { mutableStateOf(false) }
-    var generando by remember { mutableStateOf(false) }
-
-    fun aceptar() {
-        if (contrasena.isEmpty()) {
-            faltaContrasena = true
-            return
-        }
-        val caracteres = contrasena.toCharArray()
-        contrasena = ""
-        alAceptar(DatosEntrada(titulo, usuario, url, notas, listOf(etiquetas)), caracteres)
-    }
-
-    AlertDialog(
-        onDismissRequest = alCancelar,
-        title = { Text(if (entrada == null) "Añadir entrada" else "Editar entrada") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(titulo, { titulo = it }, label = { Text("Título") }, singleLine = true)
-                OutlinedTextField(usuario, { usuario = it }, label = { Text("Usuario") }, singleLine = true)
-                OutlinedTextField(
-                    value = contrasena,
-                    onValueChange = {
-                        contrasena = it
-                        faltaContrasena = false
-                    },
-                    label = { Text("Contraseña") },
-                    singleLine = true,
-                    isError = faltaContrasena,
-                    supportingText = {
-                        if (faltaContrasena) Text("Falta la contraseña. Escríbela o genera una con la llave.")
-                    },
-                    trailingIcon = { TextButton(onClick = { generando = true }) { Text("🔑") } },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                )
-                OutlinedTextField(
-                    url,
-                    { url = it },
-                    label = { Text("URL") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                )
-                OutlinedTextField(notas, { notas = it }, label = { Text("Notas") }, minLines = 3)
-                OutlinedTextField(
-                    etiquetas,
-                    { etiquetas = it },
-                    label = { Text("Etiquetas") },
-                    supportingText = { Text("Separadas por comas") },
-                    singleLine = true,
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = { aceptar() }, enabled = titulo.isNotBlank()) { Text("Aceptar") } },
-        dismissButton = { TextButton(onClick = alCancelar) { Text("Cancelar") } },
-    )
-
-    if (generando) {
-        DialogoGenerador(
-            alGuardar = {
-                contrasena = it
-                faltaContrasena = false
-                generando = false
-            },
-            alCancelar = { generando = false },
         )
     }
 }
